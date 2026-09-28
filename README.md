@@ -118,6 +118,8 @@ IA27> ¡Hola! ¿Cómo estás? Estoy aquí para ayudarte en lo que necesites. ¿E
 | `/tokens [n]` | tokens máximos por respuesta |
 | `/exit` | sale de la sesión |
 
+Los comandos se aceptan también **sin `/`** en formas inequívocas (`net on`, `clear`, `tokens 512`), con una nota gris de confirmación. Texto libre que empiece parecido (`net neutro`, "help me con esto") sigue yendo al modelo como chat.
+
 ### Búsqueda en internet
 
 Al arrancar la sesión se pregunta **una sola vez** si autorizas que el agente busque automáticamente:
@@ -145,6 +147,8 @@ Seguridad:
 - Las rutas se resuelven contra el área de trabajo; lecturas fuera de ella requieren permiso explícito.
 - Los marcadores nunca se muestran en pantalla (buffer anti-fugas del streaming).
 - Si deniegas una acción, el agente lo informa claramente en lugar de inventar el resultado.
+- **Rechazo con motivo** — al denegar un permiso, podés explicar por qué: escribe `n <motivo>` (ej. `n no toques el index`) o solo `n` y la terminal te preguntará "¿Por qué no?" (solo en terminal interactiva; con stdin pipeado no pregunta para no romper scripts). El motivo se le pasa al modelo para que adapte su respuesta y no repita la misma acción.
+- **Anti-bucle de denegación** — si el modelo reemite la misma acción ya denegada con motivo en el mismo turno, la terminal no vuelve a preguntar: le inyecta el motivo y le dice que no insista.
 - **Anti-alucinación de acciones** — si el modelo afirma "he creado el archivo X" o "ejecuté el comando Y" sin haber emitido el marcador, la terminal lo detecta, descarta la respuesta falsa y fuerza un reintento con el formato correcto (máx. 2). `[[WRITE]]` sin su cierre `[[END]]` se considera incompleto y **no crea nada**.
 - El agente recuerda la última ruta usada por las herramientas en la sesión: pedidos como *"en esa carpeta"* o *"con el título mejoras"* se resuelven contra ella.
 

@@ -19,13 +19,14 @@ Carpeta   : C:\Users\nicot\OneDrive\Desktop\Estalingrado corp\proyectos\IA 27 T\
              logs\                             ← lo crea solo al arrancar
 Portable  : ia_terminal\publish\portable.exe
              CON los fixes (Job Object + mutex + logs, ver PARTE 19).
-Entrega   : portable 0.2.exe  ·  69.889.039 bytes  ·  2026-09-27 16:0x
-             SHA-256 C5124DB102CD7C0D57D526FABD39E7326A787FA743E53609A5607006A3CEFD70
-             ACTUALIZADA el 27/9 con el código actual: búsqueda por intención
-             (PARTE 22) + interfaz Spectre.Console (PARTE 23). Es idéntica al
-             publish. Antes tuvo 7AEB42E9…63399 (con búsqueda, sin Spectre).
-             Ver PARTE 17 para el hash histórico de la congelada de las 03:34
-             (437F0212…D044F5) y la regla de actualización.
+Entrega   : portable 0.2.exe  ·  69.889.039 bytes  ·  2026-09-27 16:3x
+             SHA-256 A17626648598A4C351AF654228F6FF90714A44DEA76AF5694456DA5BD863B6A7
+             ACTUALIZADA el 27/9: búsqueda por intención (PARTE 22) + interfaz
+             Spectre.Console (PARTE 23) + fix comandos sin "/" (P15.37). Es
+             idéntica al publish. Hashes anteriores (mismo día, a pedido):
+             C5124DB1…CEFD70 (Spectre, sin fix P15.37) y 7AEB42E9…63399
+             (búsqueda, sin Spectre). Ver PARTE 17 para la histórica
+             437F0212…D044F5 y la regla de actualización.
 Versión   : 0.2   ← CONGELADA (ver PARTE 21)
              0.1   (2026-09-27 02:23)  SIN los fixes de la PARTE 19. Ya no está
                    en esta máquina (se fue con el pendrive); queda su hash
@@ -55,6 +56,12 @@ Actualizado: 2026-09-27 (interfaz) — banner nuevo con Spectre.Console (nuevo
   logo, tabla de Estado y comandos reales. NO se agregaron atajos ctrl+x ni
   pistas @/! porque no existen (serían mentiras en pantalla): fases B y C en
   P16. Reglas nuevas de interfaz en PARTE 23 y AGENTS.md.
+
+Actualizado: 2026-09-27 (P15.37) — los comandos sin "/" ya se normalizan en el
+  host (NormalizeBareCommand): palabra suelta, "net on/off", "<cmd> <número>".
+  Con el resguardo de que "net neutro" y texto libre nunca normalizan (un
+  argumento desconocido en /net habría apagado internet sin avisar). Entrega
+  actualizada: hash A1762664…63B6A7.
 
 Actualizado: 2026-09-27 (entrega 2) — `portable 0.2.exe` se actualizó de nuevo
   con la interfaz Spectre: 69.889.039 bytes, hash C5124DB1…CEFD70, idéntica
@@ -892,6 +899,32 @@ en cualquier sesión de desarrollo. opencode las sigue (ver PARTE 2):
                                                           inventar lo que el resultado no
                                                           trajo (y/o trampa de placeholders
                                                           de datos).
+ 37. Un comando sin "/" se lo comió el modelo              → "net on" (sin barra) llegó al
+                                                               modelo como chat: emitió
+                                                               [[NET]] con una query
+                                                               INVENTADA ("Estalingrado Corp
+                                                               empresa" para "net on", y hasta
+                                                               para "net neutro") y la
+                                                               respuesta degeneró en basura
+                                                               sobre la empresa. CORREGIDO:
+                                                               NormalizeBareCommand → el host
+                                                               normaliza comandos obvios sin
+                                                               "/" (palabra suelta conocida,
+                                                               "net on|off", "tokens N"...)
+                                                               ANTES de mandar nada al modelo.
+                                                               Cuidado probado al hacerlo:
+                                                               "net neutro" era chat real y la
+                                                               primera versión del regex lo
+                                                               convertía en `/net neutro` →
+                                                               argumento desconocido → ponía
+                                                               NetEnabled=false: un mensaje
+                                                               INOCENTE habría apagado
+                                                               internet sin avisar. Ahora
+                                                               "net X" solo normaliza si X es
+                                                               on/off, y system/harness/textlibre
+                                                               siempre exigen "/". El modelo
+                                                               inventando queries es P15.36,
+                                                               sigue PENDIENTE aparte.
 
 ################################################################################
 # PARTE 16 — PRÓXIMOS PASOS SUGERIDOS (27/9 04:45)
@@ -946,7 +979,7 @@ LO QUE SIGUE PENDIENTE:
      ese esquema (una sola entrega viva que se sobrescribe, con hash anotado
      cada vez) o se vuelve al esquema de versiones congeladas (0.3, 0.4…)?
      Mientras tanto, `portable 0.2.exe` ES el código actual y el hash a
-     anotar es C5124DB1…CEFD70 (con Spectre, PARTE 23).
+     anotar es A1762664…63B6A7 (con Spectre + fix P15.37).
  15. Fase B de la interfaz (PARTE 23): menú de permisos con flechas
      (SelectionPrompt) en vez de s/n, CON fallback a s/n cuando
      Console.IsInputRedirected — si no, se rompen las pruebas con stdin
@@ -1007,6 +1040,10 @@ Sirve para poder volver a una versión conocida que ya se probó buena.
            (PARTE 23). Hash vigente de la entrega:
                C5124DB102CD7C0D57D526FABD39E7326A787FA743E53609A5607006A3CEFD70
                69.889.039 bytes (subió ~1 MB: el paquete Spectre.Console)
+           ⚠ 27/9 16:3x: ACTUALIZACIÓN 3 — fix de comandos sin "/" (P15.37:
+           "net on" iba al modelo en vez de al comando). Hash vigente:
+               A17626648598A4C351AF654228F6FF90714A44DEA76AF5694456DA5BD863B6A7
+               69.889.039 bytes
            El hash viejo (437F0212…D044F5) queda anotado arriba como HISTÓRICO: es
            el .exe que se probó en la prueba de Fury³ y falló. Si algún día hay
            que volver a ese estado, se reconstruye desde el commit anterior a la
@@ -1522,6 +1559,70 @@ VERIFICACIÓN (27/9):
 
 Fases siguientes: B (menú de permisos con fallback) y C (atajos y @/!)
   en P16.
+
+################################################################################
+# PARTE 24 — RECHAZO CON MOTIVO (F1, 28/9)
+################################################################################
+
+QUÉ CAMBIÓ
+  Cuando el usuario deniega un permiso de herramienta (READ fuera de sandbox,
+  CMD o WRITE), la terminal ahora captura el motivo y se lo inyecta al modelo
+  como instrucción de contexto, para que el 7B cambie de enfoque en vez de
+  repetir la misma acción en bucle (incidente Fury³ / P21).
+
+IMPLEMENTACIÓN
+  · `ConfirmTool` → devuelve `PermissionDecision(bool Allowed, string Reason)`.
+  · Parser de una línea: split en primer espacio. Token 1 (recortando
+    puntuación final) decide:
+      - Allow: `s | si | sí | y | yes`
+      - Deny con motivo inline: `n | no | nel | nope | nah` + resto = motivo
+      - Deny sin motivo: cualquier otra cosa (comportamiento actual preservado)
+  · Segunda etapa interactiva: si denegaste sin motivo y `!Console.IsInputRedirected`
+    → imprime "¿Por qué no? (una línea, opcional): " y lee. Enter vacío = sin motivo.
+    Con stdin pipeado **no** pregunta (evita comerse la línea siguiente del script).
+  · `SanitizeReason`: tope 300 chars, `[[` → `[`, colapsa espacios.
+  · `ExecuteToolWithPermissionAsync(..., HashSet<string> deniedInTurn)`:
+    clave `KIND|ruta` o `KIND|comando`. Si ya existe → auto-deniega SIN prompt:
+      `[INTERCEPCIÓN] El modelo repitió una acción que ya negaste; no se vuelve a preguntar.`
+    y devuelve contexto de rechazo con el motivo guardado.
+  · `BuildDeniedMessage(what, target, reason, isRepeat)`: mantiene el prefijo
+    `[SISTEMA · el usuario denegó ...]` EXACTO (load-bearing para `ToolWasDenied`).
+    Sin motivo → texto actual. Con motivo → agrega "Motivo del usuario: ..." +
+    instrucción de no repetir. Repetida → mismo prefijo + "Ya le negaste esto
+    antes... NO vuelvas a emitir el marcador".
+
+TRAMPAS EVITADAS
+  1) El prefijo `[SISTEMA · el usuario denegó` NO se toca: `ToolWasDenied()`
+     hace `StartsWith` y de eso depende que una escritura denegada NO cuente
+     como ejecutada (incidente P15: denegación contada como escrita).
+  2) `deniedInTurn` es **local por turno** (creado al inicio de
+     `AskWithNetPermissionAsync` y `RunHarnessAsync`), nunca campo de
+     instancia. Si persistiera entre turnos, una denegación del turno 1
+     auto-denialaría la misma escritura en el turno 5 sin preguntar — viola
+     la regla 5 de AGENTS.md (CMD/WRITE siempre preguntan).
+  3) Con stdin pipeado **no** hay segunda lectura: un `ReadLine` extra
+     se comería el próximo comando del script (misma trampa que P15.37 con
+     "net neutro"). El motivo inline (`n porque...`) sí funciona pipeado.
+  4) Motivo del usuario va a contexto de modelo → sanitizado contra `[[`
+     markers y truncado 300 chars.
+
+VERIFICACIÓN (28/9)
+  · Parser probado en PowerShell contra 20 casos (allow, deny inline,
+    deny sin motivo, casos borde: "nariz", "s.", "sí, dale", "no, mejor...").
+  · build 0 errores · publish OK.
+  · `portable.exe doctor` [OK] · `listar` [OK].
+  · Prueba pipeada con modelo real:
+      - `creame archivo :: ...[[END]]` → `n porque no toques el index` →
+        archivo NO creado, modelo reconoce motivo y no reemite.
+      - Misma acción repetida en mismo turno (harness) → auto-deniega sin prompt.
+      - Denegación simple `n` → archivo no creado, retrocompatibilidad OK.
+  · `portable 0.2.exe` actualizado: hash `4D2274468F3610BBC12BA6822C7ABF45FAEDF8FD9D26CD1B16F9B98284D2B904`,
+    69.893.135 bytes, doctor OK.
+  · AGENTS.md y README.md actualizados.
+
+PENDIENTES P16 (sin cambios)
+  15. Fase B: menú de permisos con píldoras + fallback a s/n (pipeado).
+  16. Fase C: atajos ctrl+x reales + pistas @/! (solo si existen).
 
 ################################################################################
 FIN DEL DOCUMENTO — IA27 TERMINAL · ESTALINGRADO CORP · INTRA-NET

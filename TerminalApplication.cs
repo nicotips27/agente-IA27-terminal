@@ -536,6 +536,25 @@ public sealed class TerminalApplication
                 continue;
             }
 
+            // Comandos sin "/": el usuario escribe "net on" esperando el comando,
+            // y sin esta normalización le llega al modelo como chat (P15.37).
+            // Solo se normalizan formas inequívocas (una sola palabra conocida,
+            // "net on|off", o "<comando> <número>"): nunca texto libre.
+            var bareCommand = NormalizeBareCommand(input);
+            if (bareCommand is not null)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"  (interpreto \"{input}\" como {bareCommand}; el / delante también vale)");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                var bareAction = await HandleAgentCommandAsync(session, bareCommand, cancellationToken);
+                if (bareAction is not null)
+                {
+                    return bareAction;
+                }
+
+                continue;
+            }
+
             using var turn = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cancelState.Generation = turn;
             using var notice = new GenerationNotice();
@@ -972,10 +991,11 @@ public sealed class TerminalApplication
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine();
 
-        session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usuario: \"{objective}\".\nActuás como agente autónomo por pasos. En cada mensaje hacé UNA de estas tres cosas, y nada más:\n(a) un plan breve en pasos numerados (solo al inicio o si el plan cambia);\n(b) UNA herramienta, con tu mensaje empezando directamente por su marcador ([[READ]] ruta / [[CMD]] comando / [[WRITE]] ruta :: contenido [[END]]);\n(c) [[DONE]] seguido del resumen final, solo cuando el objetivo esté verificado como cumplido.\nTras cada herramienta recibirás el resultado real del sistema: verificalo antes del siguiente paso. Jamás afirmes que creaste un archivo o ejecutaste un comando sin la confirmación del sistema. Límite: {HarnessMaxSteps} pasos; si el objetivo no cabe, proponé lo antes posible un plan parcial alcanzable.");
+session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usuario: \"{objective}\".\nActuás como agente autónomo por pasos. En cada mensaje hacé UNA de estas tres cosas, y nada más:\n(a) un plan breve en pasos numerados (solo al inicio o si el plan cambia);\n(b) UNA herramienta, con tu mensaje empezando directamente por su marcador ([[READ]] ruta / [[CMD]] comando / [[WRITE]] ruta :: contenido [[END]]);\n(c) [[DONE]] seguido del resumen final, solo cuando el objetivo esté verificado como cumplido.\nTras cada herramienta recibirás el resultado real del sistema: verificalo antes del siguiente paso. Jamás afirmes que creaste un archivo o ejecutaste un comando sin la confirmación del sistema. Límite: {HarnessMaxSteps} pasos; si el objetivo no cabe, proponé lo antes posible un plan parcial alcanzable.");
 
         // Buffer anti-fugas (mismo criterio que AskWithNetPermissionAsync):
-        // retiene la cola desde el último '[' para que los marcadores no se impriman.
+        // retiene la cola desde el último '[' para que los marcadores no se imprimen.
+        var deniedInTurn = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var streamBuffer = new StringBuilder();
         Func<string, Task> bufferedToken = piece =>
         {
@@ -1081,7 +1101,7 @@ public sealed class TerminalApplication
                 string toolContext;
                 try
                 {
-                    toolContext = await ExecuteToolWithPermissionAsync(toolRequest, explicitByUser: false, cancellationToken);
+                    toolContext = await ExecuteToolWithPermissionAsync(toolRequest, explicitByUser: false, cancellationToken, deniedInTurn);
                 }
                 catch (TerminalException toolError)
                 {
@@ -1575,7 +1595,9 @@ public sealed class TerminalApplication
         return $"Archivo escrito: {path} ({new FileInfo(path).Length:N0} bytes).";
     }
 
-    private bool ConfirmTool(string prompt, bool dangerous, CancellationToken cancellationToken)
+    private sealed record PermissionDecision(bool Allowed, string Reason);
+
+    private PermissionDecision ConfirmTool(string prompt, bool dangerous, CancellationToken cancellationToken)
     {
         Console.ForegroundColor = dangerous ? ConsoleColor.Red : ConsoleColor.Yellow;
         if (dangerous)
@@ -1583,15 +1605,81 @@ public sealed class TerminalApplication
             Console.WriteLine("[ADVERTENCIA] El comando coincide con un patrón potencialmente destructivo.");
         }
 
-        Console.Write($"{(dangerous ? "[PELIGRO]" : "[SOLICITUD]")} {Truncate(prompt, 120)} ¿Permitir? (s/n): ");
+        Console.Write($"{(dangerous ? "[PELIGRO]" : "[SOLICITUD]")} {Truncate(prompt, 120)} ¿Permitir? (s/n, o \"n <motivo>\"): ");
         Console.ForegroundColor = ConsoleColor.White;
         var line = Console.ReadLine();
         Console.ForegroundColor = ConsoleColor.Cyan;
         cancellationToken.ThrowIfCancellationRequested();
-        return line?.Trim().ToLowerInvariant() is "s" or "si" or "sí" or "y" or "yes";
+
+        var text = line?.Trim() ?? string.Empty;
+        if (text.Length == 0)
+        {
+            return new PermissionDecision(false, string.Empty);
+        }
+
+        var parts = text.Split(new[] { ' ' }, 2);
+        var firstToken = parts[0].TrimEnd(',', '.', ';', ':', '!', '¡', '?', '¿');
+        var firstLower = firstToken.ToLowerInvariant();
+
+        var allowSet = new HashSet<string> { "s", "si", "sí", "y", "yes" };
+        var denyWithReasonSet = new HashSet<string> { "n", "no", "nel", "nope", "nah" };
+
+        if (allowSet.Contains(firstLower))
+        {
+            return new PermissionDecision(true, string.Empty);
+        }
+
+        if (denyWithReasonSet.Contains(firstLower) && parts.Length == 2)
+        {
+            var reason = parts[1].Trim();
+            return new PermissionDecision(false, SanitizeReason(reason));
+        }
+
+        if (!Console.IsInputRedirected)
+        {
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.Write("  ¿Por qué no? (una línea, opcional): ");
+            Console.ForegroundColor = ConsoleColor.White;
+            var reason = Console.ReadLine()?.Trim() ?? string.Empty;
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (reason.Length > 0)
+            {
+                return new PermissionDecision(false, SanitizeReason(reason));
+            }
+        }
+
+        return new PermissionDecision(false, string.Empty);
     }
 
-    private async Task<string> ExecuteToolWithPermissionAsync(ToolRequest tool, bool explicitByUser, CancellationToken cancellationToken)
+    private static string SanitizeReason(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return string.Empty;
+        }
+        var r = reason.Replace("\r", " ").Replace("\n", " ");
+        r = r.Replace("[[", "[").Replace("]]", "]");
+        while (r.Contains("  "))
+        {
+            r = r.Replace("  ", " ");
+        }
+        return Truncate(r, 300);
+    }
+
+    private static string BuildDeniedMessage(string what, string target, string reason, bool isRepeat)
+    {
+        var head = isRepeat
+            ? "[SISTEMA · el usuario denegó " + what + " (repetida)]"
+            : "[SISTEMA · el usuario denegó " + what + "]";
+        var reasonBlock = string.IsNullOrWhiteSpace(reason) ? string.Empty : "\nMotivo del usuario: \"" + reason + "\"";
+        var instruction = isRepeat
+            ? "\nYa le negaste esto antes. Motivo: \"" + reason + "\". NO vuelvas a emitir el marcador ni a insistir. Decile al usuario que lo negaste y por qué, y preguntale cómo seguir."
+            : "\nInforma al usuario de que la acción fue denegada; no digas que se ejecutó. Ajustá tu respuesta al motivo: no vuelvas a proponer la misma acción ni ofrezcas la misma acción de nuevo; preguntale al usuario qué hacer o proponé una alternativa.";
+        return head + reasonBlock + instruction;
+    }
+
+    private async Task<string> ExecuteToolWithPermissionAsync(ToolRequest tool, bool explicitByUser, CancellationToken cancellationToken, HashSet<string> deniedInTurn)
     {
         // Filtro anti-placeholder: el modelo no conoce rutas reales salvo que el
         // system prompt se las dé; bloquear placeholders en vez de crear carpetas falsas.
@@ -1604,6 +1692,22 @@ public sealed class TerminalApplication
             return PlaceholderInterceptionMessage(tool.Argument);
         }
 
+        string deniedKey = tool.Kind switch
+        {
+            "READ" or "WRITE" => tool.Kind + "|" + ResolveToolPath(tool.Argument),
+            "CMD" => tool.Kind + "|" + tool.Argument.Trim(),
+            _ => string.Empty
+        };
+
+        if (!string.IsNullOrEmpty(deniedKey) && deniedInTurn.Contains(deniedKey))
+        {
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"[INTERCEPCIÓN] El modelo repitió una acción que ya negaste; no se vuelve a preguntar.");
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            return BuildDeniedMessage(tool.Kind, tool.Argument, string.Empty, isRepeat: true);
+        }
+
         string result;
         switch (tool.Kind)
         {
@@ -1613,9 +1717,11 @@ public sealed class TerminalApplication
                 if (!insideSandbox && !explicitByUser)
                 {
                     Console.WriteLine();
-                    if (!ConfirmTool($"El agente quiere LEER fuera del área de trabajo: {readPath}", dangerous: false, cancellationToken))
+                    var decision = ConfirmTool($"El agente quiere LEER fuera del área de trabajo: {readPath}", dangerous: false, cancellationToken);
+                    if (!decision.Allowed)
                     {
-                        return "[SISTEMA · el usuario denegó la lectura del archivo]\nInforma al usuario de que no se pudo leer el archivo porque denegó el permiso, sin inventar su contenido.";
+                        if (decision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
+                        return BuildDeniedMessage("la lectura del archivo", readPath, decision.Reason, isRepeat: false);
                     }
                 }
 
@@ -1630,9 +1736,11 @@ public sealed class TerminalApplication
             case "CMD":
                 var dangerous = DangerousCommandPattern.IsMatch(tool.Argument);
                 Console.WriteLine();
-                if (!ConfirmTool($"El agente quiere EJECUTAR en PowerShell: {tool.Argument}", dangerous, cancellationToken))
+                var cmdDecision = ConfirmTool($"El agente quiere EJECUTAR en PowerShell: {tool.Argument}", dangerous, cancellationToken);
+                if (!cmdDecision.Allowed)
                 {
-                    return "[SISTEMA · el usuario denegó la ejecución del comando]\nInforma al usuario de que la acción fue denegada; no inventes ningún resultado del comando.";
+                    if (cmdDecision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("la ejecución del comando", tool.Argument, cmdDecision.Reason, isRepeat: false);
                 }
 
                 Console.ForegroundColor = ConsoleColor.DarkBlue;
@@ -1646,9 +1754,11 @@ public sealed class TerminalApplication
                 Console.WriteLine();
                 Console.ForegroundColor = ConsoleColor.Gray;
                 Console.WriteLine($"  Contenido ({(tool.Body ?? string.Empty).Length} caracteres): {Truncate((tool.Body ?? string.Empty).Replace("\r", " ").Replace("\n", " ⏎ "), 160)}");
-                if (!ConfirmTool($"El agente quiere ESCRIBIR el archivo: {writePath}", dangerous: false, cancellationToken))
+                var writeDecision = ConfirmTool($"El agente quiere ESCRIBIR el archivo: {writePath}", dangerous: false, cancellationToken);
+                if (!writeDecision.Allowed)
                 {
-                    return "[SISTEMA · el usuario denegó la escritura del archivo]\nInforma al usuario de que la escritura fue denegada; no digas que el archivo se creó.";
+                    if (writeDecision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("la escritura del archivo", writePath, writeDecision.Reason, isRepeat: false);
                 }
 
                 Console.ForegroundColor = ConsoleColor.DarkBlue;
@@ -1866,6 +1976,7 @@ public sealed class TerminalApplication
         var pendingWriteExecuted = false;
         var pendingCmdExecuted = false;
         var writtenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var deniedInTurn = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (TryExtractExplicitTool(prompt, out var explicitTool))
         {
             if (explicitTool is { Kind: "WRITE", Body: null })
@@ -1881,7 +1992,7 @@ public sealed class TerminalApplication
             {
                 try
                 {
-                    var explicitResult = await ExecuteToolWithPermissionAsync(explicitTool, explicitByUser: true, cancellationToken);
+                    var explicitResult = await ExecuteToolWithPermissionAsync(explicitTool, explicitByUser: true, cancellationToken, deniedInTurn);
                     if (explicitTool.Kind == "WRITE" && !ToolWasDenied(explicitResult))
                     {
                         pendingWriteExecuted = true;
@@ -1960,7 +2071,7 @@ public sealed class TerminalApplication
                 {
                     try
                     {
-                        toolContext = await ExecuteToolWithPermissionAsync(toolRequest, explicitByUser: false, cancellationToken);
+                        toolContext = await ExecuteToolWithPermissionAsync(toolRequest, explicitByUser: false, cancellationToken, deniedInTurn);
                         if (toolRequest.Kind == "WRITE" && resolvedWritePath is not null && !ToolWasDenied(toolContext))
                         {
                             writeExecuted = true;
@@ -2186,6 +2297,32 @@ public sealed class TerminalApplication
                 return content;
             }
         }
+    }
+
+    // P15.37: comandos tipeados sin "/". Solo formas inequívocas:
+    //   · una palabra suelta conocida (help, clear, exit, modelos...)
+    //   · "net", "net on", "net off" (cualquier otro argumento arriesga
+    //     apagar la red con texto que era chat: "net neutro" NO normaliza)
+    //   · "<comando> <número>" para tokens/temp/rp/topp/use
+    // Texto libre NUNCA normaliza: "help me escribir un mail" no matchea,
+    // y system/harness con texto libre exigen el "/" (riesgo alto de falso
+    // positivo: "system failure", "agente de seguros").
+    private static readonly Regex BareCommandPattern = new(
+        @"^(?<cmd>help|ayuda|clear|limpiar|history|historial|modelos|cambiar|exit|quit|salir|descargar)\s*$"
+        + @"|^(?<cmd>net|internet)(?:\s+(?<arg>on|off))?\s*$"
+        + @"|^(?<cmd>tokens|max-tokens|temp|rp|topp|use)\s+(?<arg>[0-9]+(?:[.,][0-9]+)?)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static string? NormalizeBareCommand(string input)
+    {
+        var match = BareCommandPattern.Match(input);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var arg = match.Groups["arg"].Success ? match.Groups["arg"].Value.Trim() : string.Empty;
+        return "/" + match.Groups["cmd"].Value.ToLowerInvariant() + (arg.Length > 0 ? " " + arg : string.Empty);
     }
 
     private bool AuthorizeNet(LlamaServerSession session, string query, CancellationToken cancellationToken)
