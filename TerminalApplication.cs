@@ -1597,7 +1597,116 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
 
     private sealed record PermissionDecision(bool Allowed, string Reason);
 
-    private PermissionDecision ConfirmTool(string prompt, bool dangerous, CancellationToken cancellationToken)
+    private static string SanitizeReason(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return string.Empty;
+        }
+        var r = reason.Replace("\r", " ").Replace("\n", " ");
+        r = r.Replace("[[", "[").Replace("]]", "]");
+        while (r.Contains("  "))
+        {
+            r = r.Replace("  ", " ");
+        }
+        return Truncate(r, 300);
+    }
+
+    private enum PermissionOption { Allow, Deny }
+
+    private PermissionDecision AskPermission(string prompt, bool dangerous, CancellationToken ct)
+    {
+        if (Console.IsInputRedirected)
+        {
+            return AskPermissionFallback(prompt, dangerous, ct);
+        }
+
+        Console.ForegroundColor = dangerous ? ConsoleColor.Red : ConsoleColor.Yellow;
+        if (dangerous)
+        {
+            Console.WriteLine("[ADVERTENCIA] El comando coincide con un patrón potencialmente destructivo.");
+        }
+
+        Console.Write($"{(dangerous ? "[PELIGRO]" : "[SOLICITUD]")} {Truncate(prompt, 120)} ");
+        Console.ForegroundColor = ConsoleColor.Cyan;
+
+        var options = new[] { "permitir", "denegar" };
+        var selected = 0;
+        var keyInfo = new ConsoleKeyInfo();
+
+        RenderPills(options, selected);
+        while (true)
+        {
+            keyInfo = Console.ReadKey(true);
+            ct.ThrowIfCancellationRequested();
+
+            if (keyInfo.Key == ConsoleKey.LeftArrow)
+            {
+                selected = (selected - 1 + options.Length) % options.Length;
+                RenderPills(options, selected);
+            }
+            else if (keyInfo.Key == ConsoleKey.RightArrow)
+            {
+                selected = (selected + 1) % options.Length;
+                RenderPills(options, selected);
+            }
+            else if (keyInfo.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                if (selected == 0)
+                {
+                    return new PermissionDecision(true, string.Empty);
+                }
+                return AskDenialReason(ct);
+            }
+            else if (keyInfo.Key == ConsoleKey.Escape)
+            {
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                return AskDenialReason(ct);
+            }
+        }
+    }
+
+    private void RenderPills(string[] options, int selected)
+    {
+        Console.CursorLeft = 0;
+        for (int i = 0; i < options.Length; i++)
+        {
+            if (i == selected)
+            {
+                Console.BackgroundColor = ConsoleColor.DarkCyan;
+                Console.ForegroundColor = ConsoleColor.Black;
+                Console.Write($" {options[i]} ");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write($" {options[i]} ");
+                Console.ResetColor();
+            }
+            if (i < options.Length - 1) Console.Write("  ");
+        }
+    }
+
+    private PermissionDecision AskDenialReason(CancellationToken ct)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.Write("  ¿Por qué no? (una línea, opcional): ");
+        Console.ForegroundColor = ConsoleColor.White;
+        var reason = Console.ReadLine()?.Trim() ?? string.Empty;
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        ct.ThrowIfCancellationRequested();
+        if (reason.Length > 0)
+        {
+            return new PermissionDecision(false, SanitizeReason(reason));
+        }
+        return new PermissionDecision(false, string.Empty);
+    }
+
+    private PermissionDecision AskPermissionFallback(string prompt, bool dangerous, CancellationToken ct)
     {
         Console.ForegroundColor = dangerous ? ConsoleColor.Red : ConsoleColor.Yellow;
         if (dangerous)
@@ -1609,7 +1718,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         Console.ForegroundColor = ConsoleColor.White;
         var line = Console.ReadLine();
         Console.ForegroundColor = ConsoleColor.Cyan;
-        cancellationToken.ThrowIfCancellationRequested();
+        ct.ThrowIfCancellationRequested();
 
         var text = line?.Trim() ?? string.Empty;
         if (text.Length == 0)
@@ -1635,36 +1744,117 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
             return new PermissionDecision(false, SanitizeReason(reason));
         }
 
-        if (!Console.IsInputRedirected)
-        {
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.Write("  ¿Por qué no? (una línea, opcional): ");
-            Console.ForegroundColor = ConsoleColor.White;
-            var reason = Console.ReadLine()?.Trim() ?? string.Empty;
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            cancellationToken.ThrowIfCancellationRequested();
-            if (reason.Length > 0)
-            {
-                return new PermissionDecision(false, SanitizeReason(reason));
-            }
-        }
-
         return new PermissionDecision(false, string.Empty);
     }
 
-    private static string SanitizeReason(string reason)
+    private static string ComputeDiff(string oldText, string newText, out int added, out int removed)
     {
-        if (string.IsNullOrWhiteSpace(reason))
+        if (string.IsNullOrEmpty(oldText) && string.IsNullOrEmpty(newText))
         {
-            return string.Empty;
+            added = 0; removed = 0; return string.Empty;
         }
-        var r = reason.Replace("\r", " ").Replace("\n", " ");
-        r = r.Replace("[[", "[").Replace("]]", "]");
-        while (r.Contains("  "))
+        if (string.IsNullOrEmpty(oldText))
         {
-            r = r.Replace("  ", " ");
+            added = newText.Length; removed = 0;
+            return "+ " + newText.Replace("\r", "").Replace("\n", "\n+ ");
         }
-        return Truncate(r, 300);
+        if (string.IsNullOrEmpty(newText))
+        {
+            added = 0; removed = oldText.Length;
+            return "- " + oldText.Replace("\r", "").Replace("\n", "\n- ");
+        }
+
+        var oldLines = oldText.Replace("\r", "").Split('\n');
+        var newLines = newText.Replace("\r", "").Split('\n');
+        var (lcs, path) = ComputeLcsPath(oldLines, newLines);
+
+        var sb = new System.Text.StringBuilder();
+        int i = 0, j = 0;
+        added = 0; removed = 0;
+        foreach (var move in path)
+        {
+            if (move == 0) // match
+            {
+                sb.AppendLine("  " + oldLines[i]);
+                i++; j++;
+            }
+            else if (move == 1) // delete from old
+            {
+                sb.AppendLine("- " + oldLines[i]);
+                removed += oldLines[i].Length + 1;
+                i++;
+            }
+            else if (move == 2) // insert from new
+            {
+                sb.AppendLine("+ " + newLines[j]);
+                added += newLines[j].Length + 1;
+                j++;
+            }
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    private static (int lcsLen, List<int> path) ComputeLcsPath(string[] a, string[] b)
+    {
+        int m = a.Length, n = b.Length;
+        var dp = new int[m + 1, n + 1];
+        var dir = new byte[m + 1, n + 1]; // 0=match, 1=up, 2=left
+
+        for (int i = 1; i <= m; i++)
+        {
+            for (int j = 1; j <= n; j++)
+            {
+                if (a[i - 1] == b[j - 1])
+                {
+                    dp[i, j] = dp[i - 1, j - 1] + 1;
+                    dir[i, j] = 0;
+                }
+                else if (dp[i - 1, j] >= dp[i, j - 1])
+                {
+                    dp[i, j] = dp[i - 1, j];
+                    dir[i, j] = 1;
+                }
+                else
+                {
+                    dp[i, j] = dp[i, j - 1];
+                    dir[i, j] = 2;
+                }
+            }
+        }
+
+        var path = new List<int>();
+        int x = m, y = n;
+        while (x > 0 || y > 0)
+        {
+            if (x > 0 && y > 0 && dir[x, y] == 0)
+            {
+                path.Add(0); x--; y--;
+            }
+            else if (x > 0 && (y == 0 || dir[x, y] == 1))
+            {
+                path.Add(1); x--;
+            }
+            else
+            {
+                path.Add(2); y--;
+            }
+        }
+        path.Reverse();
+        return (dp[m, n], path);
+    }
+
+    private static string BuildDiffHeader(string path, string newContent)
+    {
+        int oldSize = 0;
+        string oldContent = string.Empty;
+        if (File.Exists(path))
+        {
+            try { oldContent = File.ReadAllText(path); oldSize = oldContent.Length; } catch { }
+        }
+        int newSize = newContent.Length;
+        var diff = ComputeDiff(oldContent, newContent, out int added, out int removed);
+        var header = $"{oldSize} b → {newSize} b  ·  +{added} −{removed}";
+        return $"{header}\n{diff}";
     }
 
     private static string BuildDeniedMessage(string what, string target, string reason, bool isRepeat)
@@ -1717,7 +1907,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
                 if (!insideSandbox && !explicitByUser)
                 {
                     Console.WriteLine();
-                    var decision = ConfirmTool($"El agente quiere LEER fuera del área de trabajo: {readPath}", dangerous: false, cancellationToken);
+                    var decision = AskPermission($"El agente quiere LEER fuera del área de trabajo: {readPath}", dangerous: false, cancellationToken);
                     if (!decision.Allowed)
                     {
                         if (decision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
@@ -1736,7 +1926,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
             case "CMD":
                 var dangerous = DangerousCommandPattern.IsMatch(tool.Argument);
                 Console.WriteLine();
-                var cmdDecision = ConfirmTool($"El agente quiere EJECUTAR en PowerShell: {tool.Argument}", dangerous, cancellationToken);
+                var cmdDecision = AskPermission($"El agente quiere EJECUTAR en PowerShell: {tool.Argument}", dangerous, cancellationToken);
                 if (!cmdDecision.Allowed)
                 {
                     if (cmdDecision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
@@ -1753,8 +1943,20 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
                 var writePath = ResolveToolPath(tool.Argument);
                 Console.WriteLine();
                 Console.ForegroundColor = ConsoleColor.Gray;
-                Console.WriteLine($"  Contenido ({(tool.Body ?? string.Empty).Length} caracteres): {Truncate((tool.Body ?? string.Empty).Replace("\r", " ").Replace("\n", " ⏎ "), 160)}");
-                var writeDecision = ConfirmTool($"El agente quiere ESCRIBIR el archivo: {writePath}", dangerous: false, cancellationToken);
+                var newContent = tool.Body ?? string.Empty;
+                Console.WriteLine($"  Contenido ({newContent.Length} caracteres): {Truncate(newContent.Replace("\r", " ").Replace("\n", " ⏎ "), 160)}");
+                
+                // Diff preview para escritura
+                var diffOutput = BuildDiffHeader(writePath, newContent);
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine("  Diff:");
+                foreach (var line in diffOutput.Split('\n'))
+                {
+                    Console.WriteLine("    " + line);
+                }
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                
+                var writeDecision = AskPermission($"El agente quiere ESCRIBIR el archivo: {writePath}", dangerous: false, cancellationToken);
                 if (!writeDecision.Allowed)
                 {
                     if (writeDecision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
@@ -1764,7 +1966,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
                 Console.ForegroundColor = ConsoleColor.DarkBlue;
                 Console.Write("[herramienta: WRITE] ");
                 Console.ForegroundColor = ConsoleColor.Cyan;
-                result = ExecuteWriteTool(tool.Argument, tool.Body ?? string.Empty);
+                result = ExecuteWriteTool(tool.Argument, newContent);
                 lastToolPath = writePath;
                 Console.WriteLine("escribiendo... listo.");
                 break;
