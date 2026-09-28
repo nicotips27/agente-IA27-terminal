@@ -608,7 +608,7 @@ public sealed class TerminalApplication
             case "/ayuda":
                 Console.WriteLine("/help  /clear  /history  /system [texto]  /modelos  /cambiar  /use <selector>  /descargar  /temp [valor]  /rp [valor]  /topp [valor]  /tokens [valor]  /net [on|off]  /harness <objetivo>  /stats  /exit");
                 Console.WriteLine("Ctrl+C detiene la respuesta en curso; /tokens 512 produce respuestas más cortas.");
-                Console.WriteLine("Herramientas del agente: puede leer archivos/carpetas ([[READ]]), ejecutar comandos PowerShell ([[CMD]]) y crear archivos ([[WRITE]]); ejecución y escritura siempre piden tu permiso (s/n).");
+                Console.WriteLine("Herramientas del agente: puede leer archivos/carpetas ([[READ]]), ejecutar comandos PowerShell ([[CMD]]) y crear archivos ([[WRITE]]); ejecución y escritura siempre piden tu permiso (píldoras con las flechas, o s/n en script).");
                 Console.WriteLine("/harness <objetivo>: modo agéntico por pasos — el agente planifica, usa herramientas, verifica resultados y termina solo con [[DONE]] (máx. 15 pasos).");
                 break;
             case "/stats":
@@ -1636,7 +1636,10 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
 
     private PermissionDecision AskPermission(string prompt, bool dangerous, CancellationToken ct)
     {
-        if (Console.IsInputRedirected)
+        // Se necesitan consola REAL en los dos sentidos: con stdin redirigido no
+        // hay ReadKey (y se romperían los tests pipeados) y con stdout redirigido
+        // CursorLeft lanza "Controlador no válido" al reposicionar los píldoras.
+        if (Console.IsInputRedirected || Console.IsOutputRedirected)
         {
             return AskPermissionFallback(prompt, dangerous, ct);
         }
@@ -1647,7 +1650,12 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
             Console.WriteLine("[ADVERTENCIA] El comando coincide con un patrón potencialmente destructivo.");
         }
 
-        Console.Write($"{(dangerous ? "[PELIGRO]" : "[SOLICITUD]")} {Truncate(prompt, 120)} ");
+        // El pedido va en SU línea y los píldoras en la siguiente: RenderPills
+        // rebobina con CursorLeft=0 y, si compartieran línea, pisarían el texto
+        // del pedido (queda "permitir denegar ...rchivo: C:\...").
+        Console.WriteLine($"{(dangerous ? "[PELIGRO]" : "[SOLICITUD]")} {Truncate(prompt, 120)}");
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine("  ←/→ mover · enter confirmar · esc denegar");
         Console.ForegroundColor = ConsoleColor.Cyan;
 
         var options = new[] { "permitir", "denegar" };
@@ -1691,23 +1699,53 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
 
     private void RenderPills(string[] options, int selected)
     {
-        Console.CursorLeft = 0;
+        // Redibuja la fila completa en su propia línea (nunca rebobina a la
+        // línea del pedido). El layout es constante, así que no quedan restos.
+        // Cada CursorLeft va envuelto: si la consola no lo admite, el permiso
+        // tiene que seguir funcionando igual (a lo sumo queda desalineado).
+        var col = 0;
         for (int i = 0; i < options.Length; i++)
         {
+            var label = $" {options[i]} ";
+            if (!TrySetCursorLeft(col))
+            {
+                return;
+            }
+
             if (i == selected)
             {
                 Console.BackgroundColor = ConsoleColor.DarkCyan;
                 Console.ForegroundColor = ConsoleColor.Black;
-                Console.Write($" {options[i]} ");
-                Console.ResetColor();
             }
             else
             {
                 Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.Write($" {options[i]} ");
-                Console.ResetColor();
             }
-            if (i < options.Length - 1) Console.Write("  ");
+
+            Console.Write(label);
+            Console.ResetColor();
+            col += label.Length;
+
+            if (i < options.Length - 1)
+            {
+                Console.Write("   ");
+                col += 3;
+            }
+        }
+    }
+
+    private static bool TrySetCursorLeft(int left)
+    {
+        try
+        {
+            Console.CursorLeft = left;
+            return true;
+        }
+        catch (Exception)
+        {
+            // "Controlador no válido" con stdout redirigido (verificado 28/9):
+            // mejor dejar de reposicionar que romper el diálogo de permiso.
+            return false;
         }
     }
 
@@ -1829,7 +1867,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
                     dp[i, j] = dp[i - 1, j - 1] + 1;
                     dir[i, j] = 0;
                 }
-                else if (dp[i - 1, j] >= dp[i, j - 1])
+                else if (dp[i - 1, j] > dp[i, j - 1])
                 {
                     dp[i, j] = dp[i - 1, j];
                     dir[i, j] = 1;

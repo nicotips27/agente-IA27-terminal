@@ -19,14 +19,16 @@ Carpeta   : C:\Users\nicot\OneDrive\Desktop\Estalingrado corp\proyectos\IA 27 T\
              logs\                             ← lo crea solo al arrancar
 Portable  : ia_terminal\publish\portable.exe
              CON los fixes (Job Object + mutex + logs, ver PARTE 19).
-Entrega   : portable 0.2.exe  ·  69.889.039 bytes  ·  2026-09-27 16:3x
-             SHA-256 A17626648598A4C351AF654228F6FF90714A44DEA76AF5694456DA5BD863B6A7
-             ACTUALIZADA el 27/9: búsqueda por intención (PARTE 22) + interfaz
-             Spectre.Console (PARTE 23) + fix comandos sin "/" (P15.37). Es
-             idéntica al publish. Hashes anteriores (mismo día, a pedido):
-             C5124DB1…CEFD70 (Spectre, sin fix P15.37) y 7AEB42E9…63399
-             (búsqueda, sin Spectre). Ver PARTE 17 para la histórica
-             437F0212…D044F5 y la regla de actualización.
+Entrega   : portable 0.2.exe  ·  69.901.327 bytes  ·  2026-09-28 16:3x
+             SHA-256 B930F337C9210425D5C8675080CBE38D26B93EA51BF837F34B9D778A4D5EAD5E
+             ACTUALIZADA el 28/9: F1 rechazo con motivo (PARTE 24) + F2
+             píldoras de permiso y diff (PARTE 25) + F3 /stats (PARTE 26) +
+             fixes de los 2 bugs del camino interactivo + texto de /help
+             actualizado. Idéntica al publish (verificado byte a byte).
+             Hashes intermedios del mismo día: 4D227446…D2B904 (F1),
+             EFAF15F1…735A47 (F2), D0E8E8D4…C0A26DF (F3),
+             FC29A685…ED8E9B (fixes de F2). Ver PARTE 17 para la histórica
+             completa y la regla de actualización.
 Versión   : 0.2   ← CONGELADA (ver PARTE 21)
              0.1   (2026-09-27 02:23)  SIN los fixes de la PARTE 19. Ya no está
                    en esta máquina (se fue con el pendrive); queda su hash
@@ -50,6 +52,15 @@ Fase      : ENTRENAMIENTO. Se está probando al agente con tareas reales y se
             local por internet (Despensa Nancy, el almacén de la esquina).
             Con matices: los datos que no estaban en la búsqueda, los inventó
             (ver P15 punto 36).
+
+Actualizado: 2026-09-28 (interfaz F1+F2+F3) — las tres fases de P16 en un día:
+  F1 rechazo con motivo (PARTE 24), F2 píldoras de permiso + diff LCS en
+  escrituras (PARTE 25), F3 /stats con tok/s del último turno (PARTE 26).
+  F2 trajo 2 bugs del camino INTERACTIVO que los tests pipeados no podían ver
+  (CursorLeft con stdout redirigido = "Controlador no válido"; los píldoras
+  pisaban la línea del pedido). Corregidos y anotados en PARTE 25.
+  Entrega actualizada: hash B930F337…4D5EAD5E, 69.901.327 bytes, idéntica al
+  publish. Commits: 4229a64 (F1), 136d35a (F2), 5102516 (F3) + el fix.
 
 Actualizado: 2026-09-27 (interfaz) — banner nuevo con Spectre.Console (nuevo
   archivo Banner.cs, paquete Spectre.Console 0.57.2). Fase A hecha: panel del
@@ -952,9 +963,11 @@ LO QUE SIGUE PENDIENTE:
   5. Probar gpu-layers > 0. NO tiene sentido con este runtime: ver P12.
   6. Memoria persistente entre sesiones (/recuerda) — era la Fase 2 del plan
      original y sigue pendiente.
-  7. Métricas: /stats con tokens/seg, tiempo por turno y uso de herramientas.
-     Los números ya están medidos (P12): ~21 tok/s de prompt, ~5 de generación.
-     Falta exponerlos al usuario.
+  7. ~~Métricas: /stats con tokens/seg y tiempo por turno~~ HECHO 28/9
+     (PARTE 26): /stats | stats muestra tokens, tiempo y tok/s del ÚLTIMO
+     turno completado. SIGUE PENDIENTE el acumulado de la sesión y el uso de
+     herramientas. Números de referencia (P12): ~21 tok/s de prompt, ~5 de
+     generación. El banner todavía no muestra tok/s (punto 17).
   8. Considerar un modelo de herramientas más grande (14B) para reducir la
      dependencia de las trampas. Con 5 tok/s de generación va a ser más lento
      todavía: medir antes de decidir.
@@ -979,11 +992,20 @@ LO QUE SIGUE PENDIENTE:
      ese esquema (una sola entrega viva que se sobrescribe, con hash anotado
      cada vez) o se vuelve al esquema de versiones congeladas (0.3, 0.4…)?
      Mientras tanto, `portable 0.2.exe` ES el código actual y el hash a
-     anotar es A1762664…63B6A7 (con Spectre + fix P15.37).
- 15. Fase B de la interfaz (PARTE 23): menú de permisos con flechas
-     (SelectionPrompt) en vez de s/n, CON fallback a s/n cuando
-     Console.IsInputRedirected — si no, se rompen las pruebas con stdin
-     pipeado. Incluye panel rojo de advertencia para comandos destructivos.
+     anotar es B930F337…4D5EAD5E (F1+F2+F3+fixes, ver PARTE 17 actualización 4).
+     OJO: la "entrega congelada" ya no está congelada — se sobrescribió 4 veces
+     en un día. O se respeta el nombre y se versiona, o se renombra. Decisión
+     pendiente, no olvidar que el hash 437F0212…D044F5 (la v0.2 original de las
+     03:34) SOLO existe anotado: ya no está en disco.
+ 15. ~~Fase B de la interfaz (PARTE 23): menú de permisos con flechas~~
+     HECHO 28/9 como F2 (PARTE 25), con una variante propia: píldoras
+     [permitir] [denegar] navegables con ←/→ y confirmadas con enter (esc =
+     denegar), NO un SelectionPrompt de Spectre, y CON doble fallback cuando
+     la stdin O la stdout está pipeada (s/n de una línea). La "advertencia
+     roja para comandos destructivos" ya existía como línea de texto rojo
+     ([ADVERTENCIA]) y se conservó en ambos caminos; NO se envolvió en un
+     panel Spectre (mezclar AnsiConsole con ReadKey en el diálogo de permiso
+     es riesgo sin ganancia). Si algún día se quiere panel: probarlo a mano.
  16. Fase C de la interfaz (PARTE 23): atajos ctrl+x reales (leer teclas) y
      pistas @ (referenciar archivo) / ! (ejecutar comando). SOLO mostrar en el
      banner lo que exista: hoy la tabla lista comandos reales y nada más.
@@ -1044,6 +1066,31 @@ Sirve para poder volver a una versión conocida que ya se probó buena.
            "net on" iba al modelo en vez de al comando). Hash vigente:
                A17626648598A4C351AF654228F6FF90714A44DEA76AF5694456DA5BD863B6A7
                69.889.039 bytes
+           ⚠ 28/9: ACTUALIZACIÓN 4 — las tres fases de interfaz de P16, en
+           cuatro pasos (F1, F2, F3 y los fixes del camino interactivo).
+           HISTÓRICO de hashes del mismo día, de menor a mayor:
+               4D2274468F3610BBC12BA6822C7ABF45FAEDF8FD9D26CD1B16F9B98284D2B904
+                 69.893.135 b — F1: rechazo con motivo (PARTE 24)
+               EFAF15F1E65242EF606767078412D77505020B9F3C3C0FE40EEB23D3F3735A47
+                 69.897.231 b — F2: píldoras + diff LCS (PARTE 25)
+               D0E8E8D4BA6955C4DC44B2220B5B385F209B6F9470CFDE198C1A34C50C0A26DF
+                 69.901.327 b — F3: /stats (PARTE 26)
+               FC29A685DD851AA1B6F01EF1B9E7EBEBCE5CEDBF6BA0D8CC9F11C5ECD6ED8E9B
+                 69.901.327 b — fixes de F2 (CursorLeft/píldoras) + dif LCS
+                 en orden estándar. Verificada con doctor/listar/preguntar.
+               B930F337C9210425D5C8675080CBE38D26B93EA51BF837F34B9D778A4D5EAD5E
+                 69.901.327 b ← VIGENTE: suma el texto de /help en píldoras
+                 (el help decía "(s/n)" y ya no es así). Verificada el 28/9
+                 16:3x: idéntica al publish, doctor OK (runtime propio),
+                 listar OK, preguntar "hola" → "Mi nombre es Atenea Omega
+                 Beta (IA-27)."
+           OJO el patrón de hoy: F3, el fix y este último dieron TODOS
+           69.901.327 bytes con hash distinto: el tamaño no prueba nada
+           (regla vieja de esta PARTE), solo cambió código IL.
+           Los hashes viejos quedan arriba como HISTÓRICOS: son los .exe que se
+           probaron en cada etapa. Si algún día hay que volver a uno, se
+           reconstruye desde el commit correspondiente (4229a64 = F1,
+           136d35a = F2, 5102516 = F3, el commit de los fixes = el de PARTE 25).
            El hash viejo (437F0212…D044F5) queda anotado arriba como HISTÓRICO: es
            el .exe que se probó en la prueba de Fury³ y falló. Si algún día hay
            que volver a ese estado, se reconstruye desde el commit anterior a la
@@ -1623,6 +1670,151 @@ VERIFICACIÓN (28/9)
 PENDIENTES P16 (sin cambios)
   15. Fase B: menú de permisos con píldoras + fallback a s/n (pipeado).
   16. Fase C: atajos ctrl+x reales + pistas @/! (solo si existen).
+
+################################################################################
+# PARTE 25 — PÍLDORAS DE PERMISO Y DIFF DE ESCRITURA (F2, 28/9)
+################################################################################
+
+QUÉ CAMBIÓ (TerminalApplication.cs)
+  1) BARRA DE PERMISO CON PÍLDORAS (el camino interactivo de ConfirmTool→
+     AskPermission):
+         [SOLICITUD] El agente quiere ESCRIBIR el archivo: C:\...\x.txt
+           ←/→ mover · enter confirmar · esc denegar
+          permitir   denegar
+     - ←/→ cambia la píldora seleccionada (se repinta con fondo cian),
+       enter confirma la seleccionada, esc deniega (y en ambos casos, si se
+       deniega, sigue la 2ª etapa de F1: "¿Por qué no?").
+     - NO es un SelectionPrompt de Spectre (ReadKey crudo), como pidió P16.15:
+       la regla del streaming dice que el contenido pasa por Console.Write.
+  2) FALLBACK DOBLE: si la stdin O la stdout está redirigida se usa el s/n de
+     una línea (AskPermissionFallback) con el motivo inline de F1.
+         if (Console.IsInputRedirected || Console.IsOutputRedirected) ...
+  3) DIFF DE ESCRITURA CON LCS: antes de preguntar, para [[WRITE]] se muestra
+     el diff contra lo que hay en disco hoy:
+         Contenido (10 caracteres): UNO[[END]]
+         Diff:
+           10 b → 3 b  ·  +4 −11
+             - UNO[[END]]
+             + DOS
+     ComputeDiff/ComputeLcsPath: LCS línea a línea (DP clásico), con
+     backtracking que emite contexto "  ", borrado "- " y alta "+ ".
+     BuildDiffHeader agrega la cabecera de bytes (viejo → nuevo, +agregados
+     −borrados). Archivo nuevo: "0 b → N b · +N −0".
+
+DOS BUGS QUE ENCONTRÉ AL REVISAR EL CAMINO INTERACTIVO
+  (los tests pipeados NO los podían ver: con stdin pipeado siempre se va al
+  fallback y RenderPills nunca se ejecuta. Otra vez la lección de P21:
+  "probar de verdad", acá = leer el camino que los tests no cubren.)
+
+  BUG 1 — CursorLeft CRASHEA con stdout redirigido.
+    Empírico (28/9, PowerShell con salida a archivo):
+        [Console]::CursorLeft = 0   →  "Excepción al establecer 'CursorLeft':
+                                        Controlador no válido."
+    Es decir: `portable.exe > log.txt` con teclado real (el usuario contesta
+    el permiso a mano) habría tirado la excepción EN EL DIAGÁLOGO DE PERMISO
+    y matado el turno. Fix: la guarda de arriba suma IsOutputRedirected, y
+    además CADA CursorLeft va por TrySetCursorLeft (try/catch): si la consola
+    no lo admite, el permiso sigue funcionando igual (a lo sumo desalineado).
+
+  BUG 2 — las píldoras PISABAN la línea del pedido.
+    RenderPills hace CursorLeft=0 para repintarse, y la primera versión
+    dibujaba las píldoras en la MISMA línea que "[SOLICITUD] ...". Resultado
+    visual: "permitir denegar ...rchivo: C:\Users\..." (el texto del pedido
+    quedaba debajo de las píldoras). Fix: el pedido va con WriteLine, después
+    una línea gris de atajos, y las píldoras en SU propia línea — que es la
+    única línea a la que rebobina CursorLeft.
+
+FIX EXTRA: ORDEN ESTÁNDAR DEL DIFF
+  Con el tie-break original del DP (>=), un reemplazo salía "+ línea nueva"
+  ANTES que "- línea vieja", al revés del diff de toda la vida. Cambiado a
+  ">" (desempate hacia insertar en el paso hacia atrás): queda
+      - linea dos
+      + linea DOS
+  Verificado con el algoritmo aislado (proyecto temporal, 3 casos: archivo
+  nuevo / existente con cambio / idéntico) y después end-to-end en la app.
+
+TRAMPAS REGISTRADAS
+  - El diálogo de permiso es consola CRUDA: cualquier cosa que no sea
+    Console.Write/ReadKey/ReadLine ahí tiene que estar protegida contra
+    stdout redirigido (CursorLeft) o contra stdin pipeado (ReadKey).
+  - El layout de las píldoras tiene que ser de largo CONSTANTE entre repintados
+    (si no, quedan restos de la versión anterior). Por eso el repintado va
+    píldora por píldora con posiciones fijas, no un WriteLine.
+  - El diff se calcula SOLO contra el archivo de disco en ese instante; no
+    guarda estado entre turnos.
+
+VERIFICACIÓN (28/9)
+  · build 0 errores · publish OK · hash vigente B930F337…4D5EAD5E (la entrega
+    se re-publicó al actualizar el texto de /help; ver PARTE 17 actualización 4).
+  · Pruebas pipeadas (fallback s/n) con salida COMPLETA capturada a archivo:
+      - archivo nuevo:   Diff "0 b → 10 b · +10 −0" + "+ UNO[[END]]" → creado.
+      - archivo existente: Diff "10 b → 3 b · +4 −11" con "- UNO[[END]]"
+        antes que "+ DOS" → el archivo quedó en "DOS" (verificado en disco).
+      - denegación inline con motivo: n porque no → no creado (F1 intacto).
+      - guardia de escritura duplicada siguió funcionando (el modelo emitió
+        [[WRITE]] dos veces en el turno y la segunda se bloqueó sola).
+  · Entrega: copia byte a byte del publish (comparado por hash), doctor OK
+    (runtime de la propia entrega), listar OK, preguntar "hola" →
+    "Mi nombre es Atenea Omega Beta (IA-27)."
+  · Basura de pruebas (test_diff.txt, test_f2*.txt, test_f1*.txt,
+    test_final.txt) borrada de publish\ y de la raíz. Nada quedó en la raíz
+    (regla de P15.25).
+
+LO QUE NO SE PUDO VERIFICAR AUTOMÁTICAMENTE (honestidad)
+  El camino de las PÍLDORAS (ReadKey + repintado) requiere consola interactiva:
+  no se puede automatizar con stdin pipeado (y forzarlo por script rompería la
+  regla del fallback). Lo que sí se verificó: el crash de CursorLeft con
+  stdout redirigido (empírico), la guarda que lo evita (IsOutputRedirected),
+  el fallback completo con modelo real, y el diff de punta a punta. El
+  repintado de píldoras está verificado por lectura + cálculo de posiciones.
+  → PRUEBA PENDIENTE A MANO: abrir una sesión, pedir algo que dispare permiso
+  (p. ej. "ejecuta dir"), y mirar que las píldoras se muevan con ←/→ y que el
+  texto del pedido quede visible arriba.
+
+################################################################################
+# PARTE 26 — /stats: TOKENS Y VELOCIDAD DEL ÚLTIMO TURNO (F3, 28/9)
+################################################################################
+
+QUÉ CAMBIÓ
+  · GenerationNotice gana GetStats(): devuelve StatsSnapshot(TotalTokens,
+    Elapsed, TokensPerSecond). El reloj arranca al CREAR el aviso (inicio de
+    la generación del turno) y cuenta tokens vía OnToken (que ya se llamaba).
+  · RunAgentLoopAsync guarda el snapshot en `lastStats` en el finally de cada
+    turno → siempre queda el ÚLTIMO turno completado.
+  · Comando nuevo /stats (alias /estadisticas, y también "stats" SIN "/",
+    agregado a BareCommandPattern):
+
+        //== ESTADÍSTICAS DE SESIÓN =====================================//
+          Tokens generados:   137
+          Tiempo transcurrido:  00:24
+          Velocidad:  5.7 tok/s
+          (Última generación completada; se reinicia en cada turno)
+
+ALCANCE Y LÍMITES (documentar, no descubrir después)
+  - Es el turno ÚLTIMO, NO el acumulado de la sesión. Si querés el acumulado,
+    hay que sumarlos (pendiente, P16.7 sigue abierto en esa parte).
+  - Solo el bucle principal: los turnos de /harness NO pasan por
+    GenerationNotice (usa Console.Write directo), así que un turno de harness
+    no actualiza lastStats.
+  - No cuenta ni "tokens de prompt" ni uso de herramientas (P16.7 completo
+    sigue pendiente). La referencia de prompts está en P12 (~21 tok/s).
+  - En tests pipeados aparece "Aún no hay estadísticas": el pipe entrega la
+    línea de /stats ANTES de que termine la generación anterior (el ReadLine
+    del loop no espera). No es un bug del comando: es la secuencia del pipe.
+    Funciona en sesión interactiva, donde /stats se escribe DESPUÉS de la
+    respuesta.
+
+VERIFICACIÓN (28/9)
+  · build 0 errores · publish OK · doctor/listar/preguntar OK.
+  · "stats" sin "/" normaliza correctamente (se probó con el parser de
+    BareCommandPattern).
+  · Commits: 5102516 (F3) + 4229a64 (F1) + 136d35a (F2).
+
+PENDIENTES QUE DEJAN ABIERTAS ESTAS DOS PARTES
+  - Acumulado de sesión en /stats y fila de tok/s en el banner (P16.7 y 17).
+  - Prueba a mano de las píldoras (PARTE 25, arriba).
+  - Fase C (P16.16): atajos ctrl+x y pistas @/! — sin empezar, y el banner
+    NO los muestra porque no existen.
 
 ################################################################################
 FIN DEL DOCUMENTO — IA27 TERMINAL · ESTALINGRADO CORP · INTRA-NET

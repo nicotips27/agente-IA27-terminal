@@ -14,7 +14,7 @@ Terminal de inteligencia artificial que corre **modelos GGUF de forma local** co
 - **Búsqueda en internet con permiso** — el agente emite el marcador `[[NET]]`, el sistema te pregunta una sola vez por sesión y, si autorizas, busca por intención (lugares: Nominatim/OpenStreetMap; clima: Open-Meteo; resto: Wikipedia/DuckDuckGo con el texto de la página resultante) e inyecta los datos reales en el contexto.
 - **Anti-alucinación** — si el modelo no está seguro de un dato (empresas, personas, eventos, precios, noticias), **busca en lugar de inventar**. Si la búsqueda no arroja nada, lo dice claramente.
 - **Búsqueda explícita del usuario** — si escribes `busca en internet <tema>`, `investiga <tema>` o `<tema> en la web`, la terminal busca directamente sin depender del modelo.
-- **Herramientas de agente (READ / CMD / WRITE)** — el agente puede leer archivos y carpetas, ejecutar comandos de PowerShell y crear o reescribir archivos mediante los marcadores `[[READ]]`, `[[CMD]]` y `[[WRITE]]`. Ejecución y escritura **siempre piden tu confirmación (s/n)**. Máximo 5 herramientas encadenadas por turno.
+- **Herramientas de agente (READ / CMD / WRITE)** — el agente puede leer archivos y carpetas, ejecutar comandos de PowerShell y crear o reescribir archivos mediante los marcadores `[[READ]]`, `[[CMD]]` y `[[WRITE]]`. Ejecución y escritura **siempre piden tu confirmación** (píldoras `permitir`/`denegar` con las flechas en consola interactiva; `s/n` si está corriendo por script). Máximo 5 herramientas encadenadas por turno.
 - **Modo harness (`/harness <objetivo>`)** — bucle agéntico autónomo: el agente planifica, usa herramientas paso a paso, verifica los resultados reales que le devuelve el sistema y termina por su cuenta emitiendo `[[DONE]]` con un resumen. Límite de 15 pasos y mismo régimen de permisos.
 - **Gestor de modelos integrado** — descarga, lista y cambia entre modelos GGUF desde la propia terminal.
 - **Diagnóstico** — comando `doctor` que comprueba modelo, runtime y hardware.
@@ -116,9 +116,10 @@ IA27> ¡Hola! ¿Cómo estás? Estoy aquí para ayudarte en lo que necesites. ¿E
 | `/harness <objetivo>` | modo agéntico por pasos (plan → herramientas → verificar → `[[DONE]]`) |
 | `/temp`, `/rp`, `/topp` | ajusta muestreo |
 | `/tokens [n]` | tokens máximos por respuesta |
+| `/stats` | tokens, tiempo y velocidad (tok/s) del último turno |
 | `/exit` | sale de la sesión |
 
-Los comandos se aceptan también **sin `/`** en formas inequívocas (`net on`, `clear`, `tokens 512`), con una nota gris de confirmación. Texto libre que empiece parecido (`net neutro`, "help me con esto") sigue yendo al modelo como chat.
+Los comandos se aceptan también **sin `/`** en formas inequívocas (`net on`, `clear`, `tokens 512`, `stats`), con una nota gris de confirmación. Texto libre que empiece parecido (`net neutro`, "help me con esto") sigue yendo al modelo como chat.
 
 ### Búsqueda en internet
 
@@ -138,12 +139,14 @@ El agente dispone de tres herramientas sobre tu equipo. Puede decidir usarlas po
 | Marcador | Acción | Confirmación |
 | --- | --- | --- |
 | `[[READ]] ruta` | Lee un archivo (máx. 4000 chars) o lista una carpeta | No, salvo fuera del área de trabajo |
-| `[[CMD]] comando` | Ejecuta PowerShell (cwd del proyecto, timeout 30 s) | Siempre (s/n) |
-| `[[WRITE]] ruta :: contenido [[END]]` | Crea o reemplaza un archivo (con vista previa) | Siempre (s/n) |
+| `[[CMD]] comando` | Ejecuta PowerShell (cwd del proyecto, timeout 30 s) | Siempre (píldoras / `s/n`) |
+| `[[WRITE]] ruta :: contenido [[END]]` | Crea o reemplaza un archivo, con vista previa **y diff** | Siempre (píldoras / `s/n`) |
 
 Seguridad:
 
 - Los comandos con patrones potencialmente destructivos (`Remove-Item -Recurse -Force`, `format`, `shutdown`, etc.) muestran una **advertencia en rojo** antes de pedir permiso.
+- **Barra de permiso con píldoras** — en consola interactiva el pedido se responde con `←`/`→` para mover, `enter` para confirmar y `esc` para denegar. Si la terminal está corriendo por script (stdin o stdout redirigido) cae al `s/n` de siempre para no romper los scripts.
+- **Diff de escritura** — antes de autorizar un `[[WRITE]]` se muestra el diff contra lo que hay en disco ahora mismo, con la cabecera de bytes: `viejo b → nuevo b · +X −Y`, líneas `-` borradas y `+` agregadas.
 - Las rutas se resuelven contra el área de trabajo; lecturas fuera de ella requieren permiso explícito.
 - Los marcadores nunca se muestran en pantalla (buffer anti-fugas del streaming).
 - Si deniegas una acción, el agente lo informa claramente en lugar de inventar el resultado.
