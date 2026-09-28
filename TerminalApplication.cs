@@ -25,6 +25,7 @@ public sealed class TerminalApplication
     private bool jsonOutput;
     private bool noBanner;
     private Mutex? modelInstanceMutex;
+    private StatsSnapshot? lastStats;
 
     private const string ModelInstanceMutexName = "IA27Terminal.portable.model";
     
@@ -586,6 +587,7 @@ public sealed class TerminalApplication
             }
             finally
             {
+                lastStats = notice.GetStats();
                 cancelState.Generation = null;
             }
         }
@@ -604,10 +606,28 @@ public sealed class TerminalApplication
                 return new SessionAction(true, null);
             case "/help":
             case "/ayuda":
-                Console.WriteLine("/help  /clear  /history  /system [texto]  /modelos  /cambiar  /use <selector>  /descargar  /temp [valor]  /rp [valor]  /topp [valor]  /tokens [valor]  /net [on|off]  /harness <objetivo>  /exit");
+                Console.WriteLine("/help  /clear  /history  /system [texto]  /modelos  /cambiar  /use <selector>  /descargar  /temp [valor]  /rp [valor]  /topp [valor]  /tokens [valor]  /net [on|off]  /harness <objetivo>  /stats  /exit");
                 Console.WriteLine("Ctrl+C detiene la respuesta en curso; /tokens 512 produce respuestas más cortas.");
                 Console.WriteLine("Herramientas del agente: puede leer archivos/carpetas ([[READ]]), ejecutar comandos PowerShell ([[CMD]]) y crear archivos ([[WRITE]]); ejecución y escritura siempre piden tu permiso (s/n).");
                 Console.WriteLine("/harness <objetivo>: modo agéntico por pasos — el agente planifica, usa herramientas, verifica resultados y termina solo con [[DONE]] (máx. 15 pasos).");
+                break;
+            case "/stats":
+            case "/estadisticas":
+                if (lastStats is not null)
+                {
+                    Console.ForegroundColor = ConsoleColor.DarkBlue;
+                    Console.WriteLine("//== ESTADÍSTICAS DE SESIÓN =============================================//");
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.WriteLine($"  Tokens generados:  {lastStats.TotalTokens:N0}");
+                    Console.WriteLine($"  Tiempo transcurrido:  {lastStats.Elapsed:mm\\:ss}");
+                    Console.WriteLine($"  Velocidad:  {lastStats.TokensPerSecond:0.0} tok/s");
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                    Console.WriteLine("  (Última generación completada; se reinicia en cada turno)");
+                }
+                else
+                {
+                    Console.WriteLine("Aún no hay estadísticas (primera generación en curso o no hubo turnos).");
+                }
                 break;
             case "/clear":
             case "/limpiar":
@@ -2510,7 +2530,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
     // y system/harness con texto libre exigen el "/" (riesgo alto de falso
     // positivo: "system failure", "agente de seguros").
     private static readonly Regex BareCommandPattern = new(
-        @"^(?<cmd>help|ayuda|clear|limpiar|history|historial|modelos|cambiar|exit|quit|salir|descargar)\s*$"
+        @"^(?<cmd>help|ayuda|clear|limpiar|history|historial|modelos|cambiar|exit|quit|salir|descargar|stats|estadisticas)\s*$"
         + @"|^(?<cmd>net|internet)(?:\s+(?<arg>on|off))?\s*$"
         + @"|^(?<cmd>tokens|max-tokens|temp|rp|topp|use)\s+(?<arg>[0-9]+(?:[.,][0-9]+)?)\s*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -3314,6 +3334,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         private readonly System.Threading.Timer timer;
         private int tokens;
         private int shown;
+        private readonly DateTime startTime = DateTime.UtcNow;
 
         public GenerationNotice()
         {
@@ -3329,6 +3350,13 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         public void Dispose()
         {
             timer.Dispose();
+        }
+
+        public StatsSnapshot GetStats()
+        {
+            var elapsed = DateTime.UtcNow - startTime;
+            var tps = elapsed.TotalSeconds > 0 ? Volatile.Read(ref tokens) / elapsed.TotalSeconds : 0;
+            return new StatsSnapshot(Volatile.Read(ref tokens), elapsed, tps);
         }
 
         private void OnTick()
@@ -3350,6 +3378,8 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
             }
         }
     }
+
+    private sealed record StatsSnapshot(int TotalTokens, TimeSpan Elapsed, double TokensPerSecond);
 
     private sealed record SessionAction(bool Exit, string? SwitchTo);
 }
