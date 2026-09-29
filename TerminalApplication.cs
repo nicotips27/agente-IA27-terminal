@@ -2070,6 +2070,15 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         return Regex.IsMatch(value, @"^[\w .\-()áéíóúñÁÉÍÓÚÑ]+\.\w{1,8}$");
     }
 
+    private static readonly Regex ActionRequestPattern = new(
+        @"\b(instal|agreg|a[ñn]ad|modific|actualiz|cambi|reemplaz|cre|escrib|gener|guard|ejecut|correr|lanz|descarg|configur|repar|arregl|optimiz|limpi|borr|elimin|mejor|hac[ée]r|haz|us|utiliz|prob|test|verific|analiz|revis|leer|mostr|ense[ñn]|explic|ayud|resolv|solucion|comenz|empez|inici|arranc|levant|prend|apag|reinici|reset|formate|particion|mount|desmont|conect|desconect|desinstal|upgrade|downgrade|compil|build|deploy|public|sub|baj|upload|download|copi|mov|renombr|edit|abr|le|grabar|carg|proces|transform|convert|adapt|port|migr|refactoriz|reestructur|redise[ñn]|dise[ñn]|program|codific|desarroll|implement|integr|document|debug|depur|profile|benchmark|monitore|vigil|observ|monitoriz|control|gestion|administr|manej|oper|funcion|trabaj|labor|tare|actividad|proyect|planific|organiz|orden|clasific|categoriz|etiquet|marc|seleccion|eleg|escog|tom|adopt|asum|acept|rechaz|deneg|permit|autoriz|valid|confirm|autentic|identific|registr|anot|apunt|not|coment|describ|detall|especific|defin|establec|fij|pon|coloc|situ|ubic|localiz|encontr|busc|hall|descubr|revel|exhib|present|expon|demostr|chequ|checke|audit|inspeccion|examin|estudi|investig|indag|explor|recorr|naveg|surf|hoj|oj|mir|contempl|apreci|valor|calific|puntu|ranke|rating|opini|critic|elogi|felicit|agradec|d|don|colabor|cooper|asist|socorr|auxili|rescat|salv|preserv|conserv|manten|sosten|sustent|respald|backupe|duplic|replic|clon|reproduc|imit|simul|emul|represent|simboliz|signific|denot|indic|se[ñn]al|evidenci|manifest|expres|comunic|transmit|envi|mand|remit|despach|entreg|repart|distribu|compart|difund|propag|divulg|anunci|proclam|declar|afirm|asever|sost)\w*\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static bool IsActionRequest(string prompt)
+    {
+        return ActionRequestPattern.IsMatch(prompt);
+    }
+
     private bool TryExtractExplicitTool(string prompt, out ToolRequest tool)
     {
         tool = null!;
@@ -2291,6 +2300,13 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
                 Console.Write("IA27> ");
                 Console.ForegroundColor = ConsoleColor.Cyan;
             }
+        }
+
+        // Refuerzo de modo agente: si el usuario pide acciones (instalar, modificar, ejecutar),
+        // inyectar un mensaje de sistema más fuerte para que el modelo emita marcadores.
+        if (IsActionRequest(prompt))
+        {
+            session.AddContextMessage("[SISTEMA · MODO AGENTE]\nEl usuario pidió una acción concreta. Tu respuesta debe EMPEZAR EXACTAMENTE con el marcador de herramienta correspondiente:\n- [[CMD]] <comando> para ejecutar comandos (instalar software, ejecutar scripts, etc.)\n- [[WRITE]] <ruta> :: <contenido> [[END]] para escribir archivos\n- [[READ]] <ruta> para leer archivos\nNO expliques en el chat, NO le pidas al usuario que lo haga a mano, NO muestres código sin emitir el marcador. El sistema ejecutará la acción y te confirmará el resultado.");
         }
 
         var content = await session.AskAsync(prompt, bufferedToken, cancellationToken);
@@ -2570,7 +2586,8 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
     private static readonly Regex BareCommandPattern = new(
         @"^(?<cmd>help|ayuda|clear|limpiar|history|historial|modelos|cambiar|exit|quit|salir|descargar|stats|estadisticas)\s*$"
         + @"|^(?<cmd>net|internet)(?:\s+(?<arg>on|off))?\s*$"
-        + @"|^(?<cmd>tokens|max-tokens|temp|rp|topp|use)\s+(?<arg>[0-9]+(?:[.,][0-9]+)?)\s*$",
+        + @"|^(?<cmd>tokens|max-tokens|temp|rp|topp)\s+(?<arg>[0-9]+(?:[.,][0-9]+)?)\s*$"
+        + @"|^(?<cmd>use)\s*(?<arg>[0-9]*)?\s*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static string? NormalizeBareCommand(string input)

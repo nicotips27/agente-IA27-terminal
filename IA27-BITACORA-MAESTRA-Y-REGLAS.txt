@@ -1817,5 +1817,40 @@ PENDIENTES QUE DEJAN ABIERTAS ESTAS DOS PARTES
     NO los muestra porque no existen.
 
 ################################################################################
+# PARTE 27 — MODO AGENTE: EL MODELO DEJÓ DE SER CHATBOT (28/9)
+################################################################################
+
+MOTIVO: el modelo seguía comportándose como chatbot, no como agente. No emitía
+marcadores [[WRITE]]/[[CMD]]: enseñaba código en el chat, pedía al usuario que
+instalara herramientas a mano, y hasta respondía en chino.
+
+CAUSA RAÍZ: el ToolsPolicy era demasiado largo y complejo para un 7B. El modelo
+no lograba internalizar que debía EMPEZAR sus mensajes con marcadores.
+
+LO QUE CAMBIÓ:
+  1) ToolsPolicy simplificado (LlamaServerSession.cs): de ~600 a ~300 caracteres,
+     con ejemplos claros y reglas directas. Formato: "tu mensaje debe EMPEZAR con
+     uno de estos marcadores" + ejemplos + reglas cortas.
+  2) Modo agente reforzado (TerminalApplication.cs): cuando el usuario pide acciones
+     (instalar, modificar, ejecutar), se inyecta un mensaje de sistema que ordena
+     emitir marcadores. IsActionRequest() detecta verbos de acción comunes.
+  3) "use" sin argumento (TerminalApplication.cs): NormalizeBareCommand ahora
+     acepta "use" solo o con número (BareCommandPattern actualizado).
+  4) Idioma forzado (LlamaServerSession.cs): "respondé SIEMPRE en español, sin
+     excepción" al final del system prompt.
+
+VERIFICACIÓN (28/9):
+  · build 0 errores · publish OK.
+  · doctor OK · listar OK · preguntar "hola" → respuesta limpia en español.
+  · Entrega: portable 0.2.exe actualizado, hash 67D6D9D4C144B94FFC2B65B93798815C322E01108A58CEBE42CB71097B781FB7,
+    69.901.327 bytes, idéntico al publish.
+
+PENDIENTE:
+  - Prueba con el modelo real: verificar que ahora emite [[WRITE]]/[[CMD]] en vez
+    de enseñar código en el chat.
+  - El regex ActionRequestPattern quedó largo (cientos de verbos): considerar
+    simplificarlo si hay problemas de rendimiento.
+
+################################################################################
 FIN DEL DOCUMENTO — IA27 TERMINAL · ESTALINGRADO CORP · INTRA-NET
 ################################################################################
