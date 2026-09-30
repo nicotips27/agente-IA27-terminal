@@ -4,7 +4,7 @@
 
 Terminal de inteligencia artificial que corre **modelos GGUF de forma local** con `ECnet`, sin Python, sin servicios cloud y sin enviar nada a un servidor externo. Hablas con el agente en español y, si lo autorizas, puede buscar en internet, **leer tus archivos, ejecutar comandos de PowerShell y crear archivos** — siempre bajo tu control.
 
-![Captura de la IA27 Terminal](Capturas/ia27-terminal.png)
+![Sesión con herramientas del agente](Capturas/Captura%20de%20pantalla%202026-09-30%20122331.png)
 
 ## Características
 
