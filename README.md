@@ -212,6 +212,16 @@ El ejecutable es **self-contained**: no necesita .NET instalado ni Python. Para 
 - **Importante**: si la salida del modelo es basura (caracteres sin sentido), el archivo `.gguf` está **corrupto** — una copia dañada con el mismo tamaño rompe la generación sin dar error. Verificalo con `Get-FileHash` contra el original o probando `runtime\llama-cli.exe -m <modelo> -p "hola" -n 32`.
 - Antes de republicar sobre el pendrive, cerrá la terminal: el `.exe` en uso bloquea el `dotnet publish`.
 
+## Capturas de pantalla
+
+**Arranque de la terminal** (banner, estado del modelo y prompt `tú>`):
+
+![Arranque de la IA27 Terminal](Capturas/ia27-terminal.png)
+
+**Sesión con herramientas del agente** (30/9/2026):
+
+![Sesión con herramientas del agente](Capturas/Captura%20de%20pantalla%202026-09-30%20122331.png)
+
 ## Problemas conocidos
 
 - **`--cache-type q4_0` corrompe la salida** en determinados modelos GGUF (repeticiones como `Hola!ola!`, mezcla de tokens). Se usa `f16` por defecto de forma deliberada.
