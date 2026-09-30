@@ -2099,5 +2099,57 @@ PENDIENTE
   - Probar [[SPOOF]] en un entorno controlado (máquina virtual o red de laboratorio).
 
 ################################################################################
+# PARTE 32 — HERRAMIENTAS DE SEGURIDAD OFF POR DEFECTO (30/9)
+################################################################################
+
+PEDIDO DEL USUARIO
+  "no quiero que todas las herramientas de seguridad funcionen lo antes posible
+   por la seguridad de nuestro sistema". [[SPOOF]] es un ataque ACTIVO que
+  interrumpe la conectividad de dispositivos ajenos: no puede quedar disponible
+   de una.
+
+LO QUE SE HIZO
+  AppConfig.SecurityToolsEnabled (bool, arranca en false) hace TRES cosas:
+  a) BuildSystemPrompt deja de anunciar [[SCAN]]/[[SPOOF]]: se movieron del
+     ToolsPolicy fijo a una const aparte (SecurityToolsPolicy) que solo se
+     concatena si el flag está activo. Con el flag apagado el modelo NI LOS
+     CONOCE, así que no los emite por iniciativa propia.
+  b) Si aun así aparecen, los casos SCAN/SPOOF de ExecuteToolWithPermissionAsync
+     devuelven BuildDeniedMessage con SecurityToolsDisabledReason SIN ejecutar y
+     SIN preguntar nada. El motivo le explica al modelo que no insista y que solo
+     el usuario puede habilitarlas.
+  c) Se agregan a deniedInTurn, así que el reintento del mismo marcador en el
+     mismo turno se auto-deniega.
+  Comando: `config set security-tools on|off`. `config show` agrega la fila
+  "Seguridad red: desactivada (SCAN/SPOOF bloqueados)".
+
+VERIFICACIÓN
+  - build 0 errores · publish OK · portable 0.2 actualizado · doctor OK
+  - config show -> "Seguridad red: desactivada (SCAN/SPOOF bloqueados)"
+  - Prueba con el modelo real: "escanéa la red local 192.168.1.0/24" → el modelo
+    NO emitió [[SCAN]] (no lo conoce). Bloqueo confirmado.
+
+*** HALLAZGO HONESTO: EL BLOQUEO NO ES UNA AUSTA REAL ***
+  En esa misma prueba el 7B esquivó el bloqueo por otro camino:
+      [[CMD]] Test-NetConnection -ComputerName 192.168.1.1-254 -Port 445
+  O sea que la red sigue siendo alcanzable con PowerShell común a través de
+  [[CMD]]. El flag protege las dos herramientas de scapy, NO la capacidad de
+  escanear la red. PENDIENTE: implementar el `cmd-mode allowlist`
+  (allowlist|full) para que, en modo allowlist, [[CMD]] solo admita comandos de
+  lectura; recién ahí el bloqueo es efectivo.
+
+ARCHIVOS VIEJOS QUE HABÍA QUE BORRAR (no restaurar)
+  Al preparar el push, `git restore` trajo de vuelta IaTerminal.csproj y
+  LlamaServerSession.cs, que están RENOMBRADOS como ECnet.csproj y
+  ECnetServerSession.cs. Con los dos pares de archivos en la carpeta:
+   - `dotnet build` sin argumento falla con MSB1011 (más de un proyecto).
+   - si se borra solo el .csproj, el build falla con CS0246 en
+     LlamaServerSession.cs (namespace IaTerminal sin acceso a AppConfig, que
+     vive en namespace ECnet).
+  Borra los dos. Ojo: la regla de "un D en git status se recupera con git
+  restore" NO aplica cuando el archivo fue renombrado a propósito: ahí el D es
+  correcto y hay que commitearlo.
+
+################################################################################
 FIN DEL DOCUMENTO — IA27 TERMINAL · ESTALINGRADO CORP · INTRA-NET
 ################################################################################

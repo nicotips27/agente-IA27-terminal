@@ -1278,6 +1278,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
     private static readonly Regex YtdlpRequestPattern = new(@"\[\[YTDLP\]\]\s*(?<url>\S+)(?:\s+(?<format>\w+))?", RegexOptions.Compiled);
     private static readonly Regex ScanRequestPattern = new(@"\[\[SCAN\]\]\s*(?<range>\S+)", RegexOptions.Compiled);
     private static readonly Regex SpoofRequestPattern = new(@"\[\[SPOOF\]\]\s*(?<victim>\S+)\s+(?<router>\S+)(?:\s+(?<iface>\S+))?", RegexOptions.Compiled);
+    private const string SecurityToolsDisabledReason = "las herramientas de seguridad de red están DESACTIVADAS en esta terminal. [[SCAN]] y [[SPOOF]] no se ejecutan y no debe proposes otras formas de escanear la red. Si el usuario realmente las necesita, debe habilitarlas él mismo con: config set security-tools on";
     private static readonly Regex WriteMarkerPresent = new(@"\[\[WRITE\]\]", RegexOptions.Compiled);
     private static readonly Regex EndMarkerPattern = new(@"\[\[END\]\]", RegexOptions.Compiled);
     private static readonly Regex DangerousCommandPattern = new(@"\b(?:format|diskpart|bcdedit|vssadmin)\b|remove-item[^\r\n]*-recurse[^\r\n]*-force|rm\s+-rf|del\s+/[sq]|rd\s+/s|shutdown|restart-computer|stop-computer|reg\s+delete|takeown|icacls[^\r\n]*/reset|clear-disk|initialize-disk|set-executionpolicy\s+unrestricted", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -2618,6 +2619,12 @@ except KeyboardInterrupt:
                 break;
             case "SCAN":
                 var scanRange = tool.Argument;
+                if (!config.SecurityToolsEnabled)
+                {
+                    deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("el escaneo de red", scanRange, SecurityToolsDisabledReason, isRepeat: false);
+                }
+
                 Console.WriteLine();
                 var scanDecision = AskPermission($"El agente quiere ESCANEAR la red local (ARP) en el rango: {scanRange}\nEsto envía paquetes a todos los dispositivos del rango. Solo usalo en TU red.", dangerous: false, cancellationToken);
                 if (!scanDecision.Allowed)
@@ -2637,6 +2644,12 @@ except KeyboardInterrupt:
                 var spoofVictim = spoofParts[0];
                 var spoofRouter = spoofParts[1];
                 var spoofIface = spoofParts.Length > 2 ? spoofParts[2] : "Ethernet";
+                if (!config.SecurityToolsEnabled)
+                {
+                    deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("el ataque ARP spoofing", spoofVictim, SecurityToolsDisabledReason, isRepeat: false);
+                }
+
                 Console.WriteLine();
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("[ADVERTENCIA] Esto es un ATAQUE ACTIVO de man-in-the-middle (ARP spoofing).");
@@ -3826,6 +3839,7 @@ except KeyboardInterrupt:
             Console.WriteLine($"Chat template: {config.ChatTemplate}");
             Console.WriteLine($"Cache KV:      {config.CacheTypeK}/{config.CacheTypeV}");
             Console.WriteLine($"Internet:      {(config.NetEnabled ? "on (bajo autorización)" : "off")}");
+            Console.WriteLine($"Seguridad red: {(config.SecurityToolsEnabled ? "ACTIVADA (SCAN/SPOOF habilitados)" : "desactivada (SCAN/SPOOF bloqueados)")}");
             Console.WriteLine($"Espera carga:  {config.StartupTimeoutSeconds} s");
             Console.WriteLine($"System prompt: {Truncate(config.SystemPrompt, 100)}");
             return 0;
@@ -3904,6 +3918,10 @@ except KeyboardInterrupt:
             case "net":
             case "internet":
                 config.NetEnabled = value is "on" or "si" or "sí" or "yes" or "true";
+                break;
+            case "security-tools":
+            case "security":
+                config.SecurityToolsEnabled = value is "on" or "si" or "sí" or "yes" or "true";
                 break;
             case "timeout":
                 config.StartupTimeoutSeconds = ParseInt(value, "timeout");

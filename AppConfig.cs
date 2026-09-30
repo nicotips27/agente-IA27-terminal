@@ -30,6 +30,15 @@ public sealed class AppConfig
     public bool ShowStatusBar { get; set; } = true;
     public bool UseTabs { get; set; } = true;
 
+    /// <summary>
+    /// Herramientas ofensivas de red ([[SCAN]] ARP y [[SPOOF]] ARP spoofing). OFF por defecto:
+    /// [[SPOOF]] es un ataque activo que interrumpe la conectividad de dispositivos ajenos y solo
+    /// es legítimo con autorización explícita de la red. Mientras sea false, el host NO ejecuta
+    /// esos marcadores y además no los anuncia en el system prompt, así que el modelo ni los intenta.
+    /// Se activa a propósito con: config set security-tools on
+    /// </summary>
+    public bool SecurityToolsEnabled { get; set; }
+
     [JsonIgnore]
     public string ConfigPath { get; private set; }
 
@@ -126,6 +135,7 @@ public sealed class AppConfig
         ShowBanner = true;
         ShowStatusBar = true;
         UseTabs = true;
+        SecurityToolsEnabled = false;
     }
 
     public void Normalize()
