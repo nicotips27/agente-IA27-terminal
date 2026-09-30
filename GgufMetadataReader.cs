@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace IaTerminal;
+namespace ECnet;
 
 public sealed record GgufInfo(
     uint Version,

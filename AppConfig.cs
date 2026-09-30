@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace IaTerminal;
+namespace ECnet;
 
 public sealed class AppConfig
 {
@@ -10,6 +10,7 @@ public sealed class AppConfig
 
     public string ModelDirectory { get; set; } = DefaultModelDirectory;
     public string? RuntimeDirectory { get; set; }
+    public string? PythonPath { get; set; }
     public string? SelectedModel { get; set; }
     public int ContextSize { get; set; } = 4096;
     public int MaxTokens { get; set; } = 2048;
@@ -24,6 +25,10 @@ public sealed class AppConfig
     public bool NetEnabled { get; set; } = true;
     public int StartupTimeoutSeconds { get; set; } = 180;
     public string SystemPrompt { get; set; } = DefaultSystemPrompt;
+    public string Theme { get; set; } = "dark";
+    public bool ShowBanner { get; set; } = true;
+    public bool ShowStatusBar { get; set; } = true;
+    public bool UseTabs { get; set; } = true;
 
     [JsonIgnore]
     public string ConfigPath { get; private set; }
@@ -102,6 +107,7 @@ public sealed class AppConfig
     {
         ModelDirectory = DefaultModelDirectory;
         RuntimeDirectory = null;
+        PythonPath = null;
         SelectedModel = null;
         ContextSize = 4096;
         MaxTokens = 2048;
@@ -116,6 +122,10 @@ public sealed class AppConfig
         NetEnabled = true;
         StartupTimeoutSeconds = 180;
         SystemPrompt = DefaultSystemPrompt;
+        Theme = "dark";
+        ShowBanner = true;
+        ShowStatusBar = true;
+        UseTabs = true;
     }
 
     public void Normalize()
@@ -127,6 +137,9 @@ public sealed class AppConfig
         RuntimeDirectory = string.IsNullOrWhiteSpace(RuntimeDirectory)
             ? null
             : ExpandPath(RuntimeDirectory, AppContext.BaseDirectory);
+        PythonPath = string.IsNullOrWhiteSpace(PythonPath)
+            ? null
+            : ExpandPath(PythonPath, AppContext.BaseDirectory);
         ContextSize = Math.Clamp(ContextSize, 256, 1_048_576);
         MaxTokens = Math.Clamp(MaxTokens, 1, 131_072);
         Threads = Math.Clamp(Threads, 1, 1024);

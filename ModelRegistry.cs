@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 
-namespace IaTerminal;
+namespace ECnet;
 
 public sealed record AgentModelInfo(
     string Id,

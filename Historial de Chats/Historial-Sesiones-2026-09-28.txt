@@ -1,0 +1,81 @@
+================================================================================
+CHAT DE TRABAJO · opencode (agente de código) + Estalingrado Corp
+Proyecto: IA27 Terminal · C#/.NET 8 + llama.cpp · modelo local 7B
+Fecha   : 2026-09-28
+Carpeta : C:\Users\nicot\OneDrive\Desktop\Estalingrado corp\proyectos\IA 27 T\
+Nota    : este archivo es un HISTORIAL de la sesión. El detalle de cada cambio
+          está en IA27-BITACORA-MAESTRA-Y-REGLAS.txt (PARTE 27).
+================================================================================
+
+tú> Lee IA27-BITACORA-MAESTRA-Y-REGLAS.txt
+  [se adjunta el contenido de la bitácora maestra, 1.821 líneas]
+
+tú> el modelo sigue comportándose como chat bot y no como agente no puede ni
+    instalar herramientas en la misma consola que esta
+    [pega 2 historiales de chat: "ia 27 pruebas pagina web 28-09-26 02.txt" e
+     "ia 27 pruebas pagina web 28-09-26.txt"]
+
+  Resumen de los 6 fallos del historial:
+  · "use" → el modelo pregunta "¿qué deseas hacer?" en vez de ejecutar el comando
+  · "modigiva este archivo..." → LEE y luego ENSEÑA el código en el chat
+  · "analiza la web..." → pregunta permiso, suelta [[CMD]] nmap
+  · "lo puedes instalar?" → le dice al usuario que abra PowerShell a mano
+  · "se supone que lo hagas tú" → intenta pero se corta
+  · "soy nicotips27" → responde en CHINO
+
+opencode> Diagnóstico con el código a la vista:
+  Causa raíz: el ToolsPolicy era demasiado largo y complejo para un 7B. El modelo
+  no lograba internalizar que debía EMPEZAR sus mensajes con marcadores.
+
+  Solución propuesta (4 cambios):
+    1) Simplificar el ToolsPolicy (más corto y directo)
+    2) Agregar un "modo agente" más agresivo cuando el usuario pide acciones
+    3) El problema del "use" → NormalizeBareCommand no matchea "use" solo
+    4) El problema del idioma → reforzar el system prompt con "Responde SIEMPRE
+       en español"
+
+tú> ok
+
+opencode> Implementado y verificado:
+
+  1) ToolsPolicy simplificado (LlamaServerSession.cs): de ~600 a ~300 caracteres,
+     con ejemplos claros y reglas directas.
+  2) Modo agente reforzado (TerminalApplication.cs): cuando el usuario pide acciones
+     (instalar, modificar, ejecutar), se inyecta un mensaje de sistema que ordena
+     emitir marcadores. IsActionRequest() detecta verbos de acción comunes.
+  3) "use" sin argumento (TerminalApplication.cs): NormalizeBareCommand ahora
+     acepta "use" solo o con número (BareCommandPattern actualizado).
+  4) Idioma forzado (LlamaServerSession.cs): "respondé SIEMPRE en español, sin
+     excepción" al final del system prompt.
+
+  Verificación:
+  · build 0 errores · publish OK.
+  · doctor OK · listar OK · preguntar "hola" → respuesta limpia en español.
+  · Entrega: portable 0.2.exe actualizado, hash
+    67D6D9D4C144B94FFC2B65B93798815C322E01108A58CEBE42CB71097B781FB7,
+    69.901.327 bytes, idéntico al publish.
+
+tú> continua
+
+opencode> Bitácora actualizada con PARTE 27. Repo de GitHub actualizado:
+  commit 957c498 pusheado a origin/main.
+
+tú> exporta el chat aqui C:\Users\nicot\OneDrive\Desktop\Estalingrado corp\proyectos\IA 27 T\ia_terminal\Historial de Chats
+
+opencode> Historial exportado a:
+  C:\Users\nicot\OneDrive\Desktop\Estalingrado corp\proyectos\IA 27 T\ia_terminal\Historial de Chats\Historial-Sesiones-2026-09-28.txt
+
+================================================================================
+ESTADO AL CERRAR ESTE CHAT
+================================================================================
+Código   : al día en ia_terminal\, publish\portable.exe regenerado y verificado
+Entrega  : portable 0.2.exe = publish, hash 67D6D9D4...1FB7, 69.901.327 bytes,
+           doctor OK
+Repos    : origin/main = 957c498 (modo agente: ToolsPolicy simplificado +
+           refuerzo de acción + use sin arg + idioma forzado)
+Pendiente: probar con el modelo real si ahora emite [[WRITE]]/[[CMD]] en vez de
+           enseñar código en el chat
+Abierto  : P15.36 — el modelo rellena datos que la búsqueda no trajo
+Abierto  : P15.35 — variante de WriteClaimPattern: "guardado como X.txt"
+Abierto  : PARTE 20 — CORS en comodín y sin API key en llama-server
+================================================================================

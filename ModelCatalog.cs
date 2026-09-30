@@ -1,4 +1,4 @@
-namespace IaTerminal;
+namespace ECnet;
 
 public sealed record ModelDescriptor(
     string Id,

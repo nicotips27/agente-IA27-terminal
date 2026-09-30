@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace IaTerminal;
+namespace ECnet;
 
 public static class Program
 {
@@ -127,9 +127,21 @@ public static class Program
                 Console.Title = "Estalingrado Corp · Intra-net";
                 Console.BackgroundColor = ConsoleColor.Black;
                 Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.CursorVisible = true;
+                if (Console.BufferWidth < 120)
+                {
+                    Console.BufferWidth = 120;
+                }
+                if (Console.BufferHeight < 30)
+                {
+                    Console.BufferHeight = 30;
+                }
             }
         }
         catch (IOException)
+        {
+        }
+        catch (PlatformNotSupportedException)
         {
         }
     }

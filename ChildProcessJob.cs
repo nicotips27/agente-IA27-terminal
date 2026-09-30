@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace IaTerminal;
+namespace ECnet;
 
 /// <summary>
 /// Job Object de Windows con JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE. Al asociar

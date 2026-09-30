@@ -2,7 +2,11 @@
 
 ## Qué es
 
-Terminal de agente IA 100 % local en C# / .NET 8 + `llama.cpp`, sin Python. Estética Cyberpunk (consola negra/cian/azul), español como idioma de interfaz, estilo de mensajes de sistema en español con corchetes (`[SISTEMA · ...]`, `[buscando en la web...]`).
+Terminal de agente IA 100 % local en C# / .NET 8 + `ECnet`, sin Python. Estética Cyberpunk (consola negra/cian/azul), español como idioma de interfaz, estilo de mensajes de sistema en español con corchetes (`[SISTEMA · ...]`, `[buscando en la web...]`).
+
+## Las pestañas NO son de la consola
+
+En la consola **no hay pestañas**: se borró la barra dibujada con `Console.Write`, el `GetTabAtPosition` por coordenadas, los clics de ratón por P/Invoke (`ConsoleInput`/`ConsoleMouse`) y los comandos `/tab` `/new` `/close`. No volver a meterlas: la consola lee con `Console.ReadLine()` y el prompt es `tú> `.
 
 ## REGLA OBLIGATORIA — siempre actualizar el portable
 
@@ -38,7 +42,7 @@ Terminal de agente IA 100 % local en C# / .NET 8 + `llama.cpp`, sin Python. Est�
 - `Program.cs` — punto de entrada, tema de consola.
 - `Banner.cs` — banner de arranque con Spectre.Console (panel del logo, tabla de Estado, comandos reales — bitácora PARTE 23).
 - `AppConfig.cs` — configuración persistente (`config.json`).
-- `LlamaServerSession.cs` — lanza `llama-server.exe`, streaming SSE a `/v1/chat/completions`, **políticas del system prompt** (`NetPolicy`, `ToolsPolicy`).
+- `ECnetServerSession.cs` — lanza `ecnet-server.exe`, streaming SSE a `/v1/chat/completions`, **políticas del system prompt** (`NetPolicy`, `ToolsPolicy`).
 - `TerminalApplication.cs` — loop del agente, comandos `/`, búsqueda web por intención (dónde → Nominatim/OpenStreetMap; clima → Open-Meteo; general → Wikipedia con extracto + DuckDuckGo con el texto de la página ganadora — ver bitácora PARTE 22), **herramientas de agente** (`[[READ]]`, `[[CMD]]`, `[[WRITE]]`), intercepción de negativas del modelo.
 
 ## Patrón de herramientas (extensión del agente)
@@ -68,8 +72,14 @@ Reglas de seguridad vigentes:
 - `ExplicitModifyIntent` cubre el pedido "mejora/actualizá/modificá/cambiá **un archivo que ya existe**", que `ExplicitWriteIntent` no ve (exige el verbo "crear"). Pide verbo de acción **más ruta real**, y excluye negaciones con lookbehind (`(?<!no\s)`, `(?<!sin\s)`, …) para no pedir una escritura prohibida. `DelegationDemandPattern` cubre el caso sin ruta: "tenés las herramientas hacelo vos".
 - **Las rutas se truncan en los espacios** y esto NO es hypothetical: la carpeta del proyecto es "IA 27 T". Los patrones `[^\s"']+` cortan en el primer espacio, y el modelo escribe `[[WRITE]] C:\...\Desktop\IA` en vez de `C:\...\Desktop\IA 27 T\...`. Dos reparaciones, ambas usando **el disco como oráculo**: `ExtractRealPathFromText` (host: recorta desde el último espacio hasta que la ruta exista) y `RepairToolPathFromContext` (ruta del modelo: busca en el propio mensaje la ruta más larga que empiece por lo que él puso y exista). `ExecuteWriteTool` **rechaza escribir si la ruta es una CARPETA** — sin eso se crea un archivo basura con el nombre de la carpeta.
 - Otras trampas de herramientas: un `[[END]]` pegado a un `[[READ]]`/`[[CMD]]` arruina la ruta (`TrimStrayEndMarker`); una escritura **denegada** no debe contar como ejecutada ni entrar en `writtenPaths` (`ToolWasDenied`), si no el reintento se come su propia guarda de duplicado; y si el modelo mete el bloque cercado dentro del archivo, el archivo arranca con ` ```html ` (`ExecuteWriteTool` lo recorta).
+- **NUNCA `Trim('"')` sobre un comando completo**: `Trim` quita comillas de AMBOS extremos del string entero, así que `Remove-Item ... "C:\...\lucher"` (bien formado) perdía la comilla de cierre y PowerShell fallaba al parsear. Solo quitar comillas si el comando ENTERO está entrecomillado (empieza Y termina con `"`). En `[[READ]]`/`[[WRITE]]` sí vale, porque ahí el argumento ES la ruta.
+- **Fallback CMD → PY por código de salida, no por texto**: si el `[[CMD]]` sale con `Código de salida != 0`, se reintenta automáticamente con `[[PY]]` vía `TryConvertCmdToPython` (New-Item/mkdir → `os.makedirs`, Move-Item → `shutil.move`, Copy-Item → `shutil.copy`, Remove-Item → `rmtree`/`remove`). El patrón de extracción de ruta tolera switches (`-Recurse -Force`) ANTES y DESPUÉS de la ruta y comillas sin cerrar — sin eso, tomaba `-Recurse` como ruta y borraba nada. No disparar el fallback por la palabra "error" en el texto (frágil y falsos positivos).
+- **Bibliotecas Python disponibles para `[[PY]]`** (instaladas en el Python 3.12.10 global, van anunciadas en el `ToolsPolicy` para que el modelo NO le pida al usuario instalarlas): openpyxl (Excel), python-docx (Word), pypdf (PDF), Pillow (imágenes), psutil (procesos/RAM/disco), pyperclip (portapapeles), watchdog (vigilar carpetas), rich (tablas con color), scapy (red). Si se agrega otra, anotarla acá Y en el `ToolsPolicy`, o el modelo no la va a usar.
+- **Herramientas de red (PARTE 31):** `[[SCAN]] <rango>` (escaneo ARP con scapy, pide permiso) y `[[SPOOF]] <ip_victima> <ip_router> [interfaz]` (ARP spoofing, **advertencia roja obligatoria + confirmación explícita**, solo pentesting ético en tu propia red). `[[YTDLP]] <link> [formato]` (descarga con yt-dlp, mp4 default, mp3 audio, destino Downloads). Las tres siguen el patrón marcador + intercepción y SIEMPRE piden permiso.
+- **Degeneración a chino (Qwen2.5)**: el modelo a veces responde en CJK pese al "respondé SIEMPRE en español" del system prompt — la instrucción no basta, hace falta trampa en el host. `ContainsExcessiveCjk` dispara cuando hay >10 caracteres CJK y >3 % de las letras del texto (comprobado en test real: la respuesta china de la sesión 29-9 dispara, una palabra china citada de pasada NO). Cuando dispara: se descarta la respuesta y se fuerza reintento en español (máx. 2). Excepción: `ChineseRequestedPattern` ("traducí al chino", "中文") desactiva la compuerta. Ojo al probarlo en PowerShell: un `.ps1` UTF-8 **sin BOM** se lee como ANSI en PS 5.1 y los CJK quedan mojibake — el test de la regla 7 hay que correrlo con `dotnet run` o con el `.ps1` guardado con BOM.
+- **Borrar carpetas: el host arma el comando, no el modelo** (sesión 29-9: el 7B emitió `[[WRITE]] D:\Seguridad :: (borrar carpeta)` — WRITE no borra carpetas — y después `rmdir` de cmd.exe, que no existe en PowerShell, en un bucle de 4 reintentos). Dos defensas: `ExplicitDeleteIntent` ("borra/eliminá/suprimí esta carpeta X" → el HOST genera `Remove-Item -LiteralPath "X" -Recurse -Force`, el modelo no decide la herramienta) y `TranslateCmdExeCommand` en `MatchToolRequest` (`rmdir`/`rd`/`del`/`erase` con `/s`/`/q` se traducen a `Remove-Item` ANTES de mostrar el permiso — el usuario ve el comando ya traducido en la píldora). PENDIENTE: el harness no corre `WriteClaimPattern`, así que el modelo pudo cantar "La carpeta ha sido eliminada" sin que se ejecutara nada y el harness cerró con "OBJETIVO CUMPLIDO". Hay que llevar las compuertas de claims al camino del harness.
 - **Para escribir un archivo largo en este modelo NO hay que bajar `max-tokens`**: con 400 el modelo agota los tokens antes de cerrar el `[[END]]` y el marcador queda incompleto. Con los 1536 de la configuración entra.
-- Un 7B **alucina rutas**: inventa placeholders (`C:\Users\TuNombreDeUsuario\...`). Defensas: `BuildEnvironmentInfo` (LlamaServerSession.cs) inyecta usuario/cwd/Documentos/Escritorio REALES en el system prompt; `PlaceholderPathPattern` bloquea la ejecución y fuerza reemisión con la ruta real; alias "documentos/escritorio/descargas" resuelven a carpetas reales en la intención explícita; escrituras a la misma ruta en el mismo turno se bloquean (idempotencia).
+- Un 7B **alucina rutas**: inventa placeholders (`C:\Users\TuNombreDeUsuario\...`). Defensas: `BuildEnvironmentInfo` (ECnetServerSession.cs) inyecta usuario/cwd/Documentos/Escritorio REALES en el system prompt; `PlaceholderPathPattern` bloquea la ejecución y fuerza reemisión con la ruta real; alias "documentos/escritorio/descargas" resuelven a carpetas reales en la intención explícita; escrituras a la misma ruta en el mismo turno se bloquean (idempotencia).
 - Al flushear colas del streaming hacia la consola, pasar SIEMPRE por `StripToolMarkers`: los fragmentos de marcador no deben llegar a pantalla.
 - **Modelo corrupto**: una copia GGUF dañada (mismo tamaño, distinto hash) produce basura tipo `0C(G&&5B<#F06E...` sin dar ningún error. Diagnóstico: `Get-FileHash <modelo>` comparado con el original, o `runtime\llama-cli.exe -m <modelo> -p "hola" -n 32` (si sale basura, el modelo está corrupto). **Nunca confiar en que la copia "está ahí"**: verificar el hash. El hash sano de `Atenea-Omega-IB2.gguf` es `65B8FCD92AF6B4FEFA935C625D1AC27EA29DCB6EE14589C55A8F115CEAAA1423`.
 - **Una sola copia del código y una sola del modelo.** Antes había dos carpetas de fuentes que divergían; ahora no. Si aparece una segunda copia, es un error.
@@ -89,7 +99,7 @@ Layout verificado y funcionando. Todo en `C:\Users\nicot\OneDrive\Desktop\Estali
 IA 27 T\
   ia_terminal\                      ← repo: código, .git, AGENTS.md, bitácora
   ia_terminal\publish\portable.exe  ← portable (el entregable real)
-  ia_terminal\publish\runtime\      ← llama-server.exe y DLLs
+  ia_terminal\publish\runtime\      ← ecnet-server.exe y DLLs
   ia_terminal\publish\config.json   ← config del portable de desarrollo
   portable 0.2.exe                  ← entrega congelada
   runtime\                          ← runtime de la entrega
@@ -103,7 +113,7 @@ IA 27 T\
 - `Save()` respeta la ruta de modelos que el usuario fija explícitamente (no la pisa la resolución automática).
 - **Hay DOS `config.json`**, uno por ejecutable, y cambiár uno no cambia el otro. Para cambiar la ruta del modelo hay que usar `portable.exe config set model-dir "<ruta>"` en los DOS, no editar el archivo a mano.
 - Publicar: `dotnet publish -c Release -o publish`. **Requiere que `portable.exe` NO esté corriendo** (IOException al empaquetar).
-- Al arrancar, un `llama-server.exe` huérfano de una sesión anterior puede impedir la carga (memoria y archivo de modelo tomados). Limpiar: `Get-Process llama-server | Stop-Process -Force`.
+- Al arrancar, un `ecnet-server.exe` huérfano de una sesión anterior puede impedir la carga (memoria y archivo de modelo tomados). Limpiar: `Get-Process ecnet-server | Stop-Process -Force`.
 - El entregable congelado NO es un .exe suelto: al lado tiene que estar `runtime\` y su propio `config.json`, si no arranca resolviendo a una ruta de C: y `doctor` da OK mentiroso.
 - Verificación rápida sin abrir la sesión: `portable.exe doctor` (todo `[OK]`) y `portable.exe listar` (debe mostrar el GGUF). Un `doctor` OK no alcanza: hay que mirar de dónde sacó el runtime y el modelo.
 

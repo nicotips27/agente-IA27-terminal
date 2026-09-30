@@ -2,14 +2,14 @@
 
 > **ESTALINGRADO CORP · INTRA-NET** — agente de IA 100 % local, en consola, estilo Cyberpunk.
 
-Terminal de inteligencia artificial que corre **modelos GGUF de forma local** con `llama.cpp`, sin Python, sin servicios cloud y sin enviar nada a un servidor externo. Hablas con el agente en español y, si lo autorizas, puede buscar en internet, **leer tus archivos, ejecutar comandos de PowerShell y crear archivos** — siempre bajo tu control.
+Terminal de inteligencia artificial que corre **modelos GGUF de forma local** con `ECnet`, sin Python, sin servicios cloud y sin enviar nada a un servidor externo. Hablas con el agente en español y, si lo autorizas, puede buscar en internet, **leer tus archivos, ejecutar comandos de PowerShell y crear archivos** — siempre bajo tu control.
 
 ![Captura de la IA27 Terminal](Capturas/ia27-terminal.png)
 
 ## Características
 
-- **100 % local** — el modelo se ejecuta en tu equipo con `llama.cpp`. Nada sale de tu máquina salvo que tú lo autorices.
-- **Sin Python** — C# / .NET 8 + binarios de `llama.cpp`. Ejecutable portable de un solo archivo.
+- **100 % local** — el modelo se ejecuta en tu equipo con `ECnet`. Nada sale de tu máquina salvo que tú lo autorices.
+- **Sin Python** — C# / .NET 8 + binarios de `ECnet`. Ejecutable portable de un solo archivo.
 - **Streaming real** — los tokens se imprimen mientras se generan. `Ctrl+C` detiene la respuesta en curso.
 - **Búsqueda en internet con permiso** — el agente emite el marcador `[[NET]]`, el sistema te pregunta una sola vez por sesión y, si autorizas, busca por intención (lugares: Nominatim/OpenStreetMap; clima: Open-Meteo; resto: Wikipedia/DuckDuckGo con el texto de la página resultante) e inyecta los datos reales en el contexto.
 - **Anti-alucinación** — si el modelo no está seguro de un dato (empresas, personas, eventos, precios, noticias), **busca en lugar de inventar**. Si la búsqueda no arroja nada, lo dice claramente.
@@ -24,7 +24,7 @@ Terminal de inteligencia artificial que corre **modelos GGUF de forma local** co
 - Windows x64
 - .NET 8 SDK (solo para compilar; el ejecutable publicado es autocontenido)
 - Un modelo `.gguf` (Qwen2.5-7B-Instruct Q4_K_M recomendado)
-- Binarios de `llama.cpp` (`llama-server.exe`)
+- Binarios de `ECnet` (`ecnet-server.exe`)
 
 ## Compilar
 
@@ -78,7 +78,7 @@ portable.exe help               # ayuda completa
 ├──────────┼─────────────────────────────────────────────────────────┤
 │ Modelo   │ Atenea-Omega-IB2.gguf                                   │
 │ Origen   │ …ve\Desktop\Estalingrado corp\proyectos\IA 27 T\modelos │
-│ Motor    │ llama.cpp local                                         │
+│ Motor    │ ECnet local                                         │
 │ Red      │ ● ON (bajo autorización)                                │
 │ Contexto │ 8192 tokens · 8 hilos · 0 capas GPU                     │
 ╰──────────┴─────────────────────────────────────────────────────────╯
@@ -189,7 +189,7 @@ Program.cs                  punto de entrada y tema de consola
 AppConfig.cs                configuración persistente
 ModelCatalog.cs             escaneo de archivos .gguf
 GgufMetadataReader.cs       lector de metadatos GGUF
-LlamaServerSession.cs       sesión de inferencia (streaming SSE)
+ECnetServerSession.cs       sesión de inferencia (streaming SSE)
 TerminalApplication.cs      lógica de terminal, comandos, búsqueda web y herramientas de agente
 ModelRegistry.cs            catálogo de modelos descargables
 Capturas/                   capturas de pantalla
@@ -201,7 +201,7 @@ El ejecutable es **self-contained**: no necesita .NET instalado ni Python. Para 
 
 ```
 <stick>\IA 27 T\ia_terminal\publish\portable.exe   ← terminal
-<stick>\IA 27 T\ia_terminal\publish\runtime\       ← llama-server.exe + DLLs
+<stick>\IA 27 T\ia_terminal\publish\runtime\       ← ecnet-server.exe + DLLs
 <stick>\IA 27 T\ia_terminal\publish\config.json    ← configuración (viaja con el USB)
 <stick>\Modelo\Atenea-Omega-IB2.gguf                ← modelos (o en publish\models\)
 ```
