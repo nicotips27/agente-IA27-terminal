@@ -414,6 +414,11 @@ public sealed class ECnetServerSession : IAsyncDisposable
         }
 
         var toolsPolicy = config.SecurityToolsEnabled ? ToolsPolicy + SecurityToolsPolicy : ToolsPolicy;
+        if (config.CmdMode == "allowlist")
+        {
+            toolsPolicy += "\n\nMODO SEGURO DE [[CMD]]: la terminal está en allowlist. Solo se ejecutan comandos de SOLO LECTURA local (Get-*, Select-Object, Measure-Object, Test-Path, dir, cat, ipconfig, systeminfo, whoami, hostname). NO intentes escanear la red (Test-NetConnection, ping, arp, nslookup, netstat), NO instales nada (winget, pip, choco, dotnet, git) y NO modifiques nada (Remove-Item, Set-Content, New-Item, Move-Item, redirección >). Si el usuario pide algo bloqueado, decile que está en modo seguro y NO busques un comando equivalente para esquivarlo.";
+        }
+
         return prompt + Environment.NewLine + Environment.NewLine + BuildEnvironmentInfo(config.ModelDirectory) + Environment.NewLine + Environment.NewLine + toolsPolicy + Environment.NewLine + Environment.NewLine + "IDIOMA: respondé SIEMPRE en español, sin excepción.";
     }
 

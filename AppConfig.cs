@@ -39,6 +39,16 @@ public sealed class AppConfig
     /// </summary>
     public bool SecurityToolsEnabled { get; set; }
 
+    /// <summary>
+    /// "full" (default) = [[CMD]] ejecuta cualquier PowerShell, siempre con permiso.
+    /// "allowlist" = solo comandos de SOLO LECTURA local (Get-*, Select-Object, Measure-Object...).
+    /// Es el cierre real del bloqueo de seguridad: con [[SCAN]]/[[SPOOF]] apagados el 7B igual
+    /// podía escanear la red con "Test-NetConnection -ComputerName 1-254" (probado, sesión 30/9).
+    /// En allowlist ese comando no entra, y tampoco entra nada que escriba, rediriga output
+    /// ni toque la red.
+    /// </summary>
+    public string CmdMode { get; set; } = "full";
+
     [JsonIgnore]
     public string ConfigPath { get; private set; }
 
@@ -136,6 +146,7 @@ public sealed class AppConfig
         ShowStatusBar = true;
         UseTabs = true;
         SecurityToolsEnabled = false;
+        CmdMode = "full";
     }
 
     public void Normalize()
@@ -160,6 +171,7 @@ public sealed class AppConfig
         ChatTemplate = string.IsNullOrWhiteSpace(ChatTemplate) ? "chatml" : ChatTemplate.Trim();
         CacheTypeK = string.IsNullOrWhiteSpace(CacheTypeK) ? "f16" : CacheTypeK.Trim();
         CacheTypeV = string.IsNullOrWhiteSpace(CacheTypeV) ? "f16" : CacheTypeV.Trim();
+        CmdMode = string.Equals(CmdMode, "allowlist", StringComparison.OrdinalIgnoreCase) ? "allowlist" : "full";
         StartupTimeoutSeconds = Math.Clamp(StartupTimeoutSeconds, 10, 3_600);
         if (string.IsNullOrWhiteSpace(SystemPrompt))
         {

@@ -2180,5 +2180,97 @@ ARCHIVOS VIEJOS QUE HABÍA QUE BORRAR (no restaurar)
   correcto y hay que commitearlo.
 
 ################################################################################
+# PARTE 33 — SONIDOS .WAV REALES Y MODO ALLOWLIST DE [[CMD]] (30/9)
+################################################################################
+
+PEDIDO
+  1) El usuario dejó sus propios sonidos en `notificacion/`: "Notificaciones 1.wav"
+     (fin de respuesta) y "Notificaciones error.wav" (permiso/error), y pidió que
+     suenen en vez del beep genérico.
+  2) Cerrar de verdad el agujero de la PARTE 32: con [[SCAN]]/[[SPOOF]] apagados
+     el 7B igual esquivaba con PowerShell. Implementar el `cmd-mode allowlist`.
+
+1) SONIDOS REALES (NotificationHelper.cs)
+  - P/Invoke `winmm!PlaySoundW` con SND_FILENAME | SND_ASYNC | SND_NODEFAULT.
+    POR QUÉ NO SoundPlayer: `System.Media.SoundPlayer` no está en net8.0 de
+    consola (vive en System.Windows.Extensions) y la otra opción era llamar a
+    PowerShell por cada sonido, que tarda ~1 s: en el camino del permiso se
+    siente lentísimo. PlaySound es asíncrono y no bloquea el streaming de tokens.
+  - OJO: PlaySound es de "un sonido a la vez": si dos eventos se pisan, el
+    segundo corta al primero. Aceptable para este uso.
+  - Fallback en dos capas: si no encuentra el .wav → MessageBeep; si encuentra
+    el archivo pero PlaySound devuelve false → MessageBeep. El log dice cuál de
+    las dos pasó, así se puede diagnosticar.
+  - ResolveSound busca `notificacion\<archivo>` en el BaseDirectory y hasta 3
+    niveles de arriba, porque el portable de desarrollo vive en publish\ y la
+    entrega en la raíz: en los dos casos los .wav están un nivel arriba.
+  - Los .wav quedan VERSIONADOS en el repo (378 KB) y se copiaron a
+    `IA 27 T\notificacion\` y `ia_terminal\publish\notificacion\`.
+  - Namespace: NotificationHelper.cs se había quedado en `namespace IaTerminal`
+    después del renombrado a ECnet y rompía el build (CS0103). Aligned a ECnet.
+
+2) MODO ALLOWLIST DE [[CMD]] (AppConfig.CmdMode = "full" | "allowlist")
+  MOTIVO REAL (no teórico): en el log de notificaciones del 30/9 quedó registrado
+  que el agente, con las herramientas de seguridad apagadas pero en modo full,
+  estaba pidiendo permiso para:
+      [[CMD]] nmap -sV 192.168.1.0/24
+      [[CMD]] $env:PATH += ";C:\Program Files\nmap"
+  O sea: no solo esquivaba el bloqueo, estaba intentando INSTALAR un escáner de
+  red. Con allowlist esas dos caen.
+
+  CÓMO FUNCIONA (TerminalApplication.IsCommandAllowedInAllowlist)
+  - Se chequea el comando COMPLETO contra CmdForbiddenPattern (escritura, red,
+    descarga, instalación, ejecución de código, evasión). Como el chequeo es
+    sobre todo el texto, también cubre lo que va dentro de un script block:
+    "Where-Object { Remove-Item C:\x }" se cae.
+  - Después se parte por ';', '&' y '|' y CADA segmento debe arrancar con un
+    verbo o alias permitido, así no alcanza "Get-ChildItem; Remove-Item" ni
+    "Get-ChildItem | Remove-Item".
+  - Se matchea el VERBO (parte antes del primer guion): "Get-ChildItem" cae en
+    "get". El verbo "test" NO está permitido a propósito, porque
+    "Test-NetConnection" y "Test-Connection" son el vector de escaneo; solo se
+    permite el nombre exacto "test-path".
+  - Un segmento que empieza con '{' o '(' se rechaza (construcción dinámica).
+  - Default = "full" a propósito: en allowlist el verbo "borra esta carpeta X"
+    genera Remove-Item y queda bloqueado, así que rompen los flujos de borrado y
+    movido que el usuario sí necesita. El bloqueo de red se opta por comando.
+  - Comando: `config set cmd-mode allowlist|full` (`seguro` = alias de
+    allowlist). `config show` agrega la fila "Modo CMD:".
+  - BuildSystemPrompt agrega un bloque "MODO SEGURO DE [[CMD]]" cuando está
+    activo, para que el modelo no gaste turnos intentando y no busque atajos.
+
+  DOS BUGS PROPIOS QUE SALIERON AL PROBAR (no compilar, probar):
+  1) Había puesto los prefijos de verbo ("get", "select") como si fueran nombres
+     completos en la allowlist, así que "Get-ChildItem" NO matcheaba y se
+     bloqueaban los comandos de lectura. 5 casos "debe pasar" fallaban.
+  2) Había puesto ';' en la lista de prohibidos Y partía por ';', así que toda
+     sentencia múltiple ("whoami; hostname") quedaba bloqueada.
+  Corregido: verbs por prefijo + ';' y '|' salen de la lista de prohibidos
+  (el control por segmentos ya los cubre).
+
+  VERIFICACIÓN
+  - 33 casos aislados en PowerShell (mismo motor .NET), 0 fallos: 14 deben pasar
+    (Get-ChildItem, Get-Process | Select-Object, dir, ipconfig /all, systeminfo,
+    Get-ChildItem | Where-Object {...}, Test-Path, Get-Service, whoami; hostname,
+    ruta absoluta a ipconfig.exe...) y 19 deben bloquear (Test-NetConnection,
+    ping, nslookup, Get-NetTCPConnection, Remove-Item, winget, pip, curl, iex,
+    redirección >, Out-File, Set-Content, New-Item, Start-Process, Where-Object
+    con Remove-Item adentro, "Get-ChildItem; Remove-Item", "Get-ChildItem |
+    Out-File"...).
+  - End-to-end con el modelo real, modo allowlist:
+    · "escanéa la red con Test-NetConnection" → el modelo se niega (y el host
+      igual lo bloquea; no aparece [SOLICITUD], o sea que el rechazo es previo
+      a preguntar).
+    · "borra esta carpeta <prueba>" → la carpeta SIGUE EXISTIENDO después del
+      turno. Verificado con Test-Path antes y después.
+  - Sonidos: el log de notificaciones registra la línea SIN el sufijo
+    "(sin archivo de sonido...)" → el .wav se resolvió y PlaySound devolvió true.
+
+PENDIENTE
+  - El usuario tiene que decidir si deja allowlist como default en el código
+    (seguro pero rompe borrados/movidos) o lo mantiene en "full" y lo activa
+    cuando hace falta.
+
+################################################################################
 FIN DEL DOCUMENTO — IA27 TERMINAL · ESTALINGRADO CORP · INTRA-NET
 ################################################################################

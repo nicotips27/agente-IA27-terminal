@@ -1279,6 +1279,93 @@ session.AddContextMessage($"[SISTEMA · MODO HARNESS ACTIVADO]\nObjetivo del usu
     private static readonly Regex ScanRequestPattern = new(@"\[\[SCAN\]\]\s*(?<range>\S+)", RegexOptions.Compiled);
     private static readonly Regex SpoofRequestPattern = new(@"\[\[SPOOF\]\]\s*(?<victim>\S+)\s+(?<router>\S+)(?:\s+(?<iface>\S+))?", RegexOptions.Compiled);
     private const string SecurityToolsDisabledReason = "las herramientas de seguridad de red están DESACTIVADAS en esta terminal. [[SCAN]] y [[SPOOF]] no se ejecutan y no debe proposes otras formas de escanear la red. Si el usuario realmente las necesita, debe habilitarlas él mismo con: config set security-tools on";
+
+    // ===== Modo allowlist de [[CMD]] (config set cmd-mode allowlist) =====
+    // Motivo: con las herramientas de seguridad apagadas, el 7B esquivó el bloqueo con
+    // "[[CMD]] Test-NetConnection -ComputerName 192.168.1.1-254 -Port 445" (sesión 30/9). Apagar
+    // [[SCAN]]/[[SPOOF]] no alcanza: [[CMD]] es PowerShell completo. En modo allowlist solo pasan
+    // comandos de SOLO LECTURA LOCAL; nada de red, nada que escriba, nada que instale.
+    private const string CmdAllowlistDisabledReason =
+        "el modo seguro está activo: [[CMD]] solo admite comandos de solo lectura local (Get-*, Select-Object, Measure-Object, Test-Path, dir, cat, ipconfig, systeminfo...). No podés escanear la red, instalar nada, ni modificar el sistema. NO busques atajos: NO emitas [[CMD]] con otro comando para lograr lo mismo. Si el usuario necesita una acción bloqueada, debe desactivar el modo seguro él mismo con: config set cmd-mode full";
+
+    // Verbos de SOLO LECTURA local. Se matchea el verbo (la parte antes del primer guion), así
+    // "Get-ChildItem" cae en "get". OJO: el verbo "test" NO va acá a propósito, porque
+    // "Test-NetConnection" y "Test-Connection" son los vectores de escaneo de red: solo se
+    // permite el nombre exacto "test-path".
+    private static readonly string[] CmdAllowedVerbs =
+    {
+        "get", "select", "where", "sort", "group", "foreach", "compare", "measure",
+        "convertto", "convertfrom", "format", "resolve", "split", "join", "read", "write",
+        "man", "help"
+    };
+
+    // Alias y comandos sin guion, con nombre exacto.
+    private static readonly string[] CmdAllowedNames =
+    {
+        "dir", "ls", "gci", "gc", "gi", "cat", "type", "pwd", "sls", "echo", "history",
+        "cls", "clear", "tree", "findstr", "sort", "more", "ipconfig", "systeminfo",
+        "whoami", "hostname", "ver", "tasklist", "test-path", "measure-object", "get-childitem"
+    };
+
+    // Palabras prohibidas en cualquier parte del comando: escritura, red, descarga, instalación,
+    // ejecución de código y evasión. Se chequean sobre el comando COMPLETO, y por eso también
+    // cubren lo que va dentro de un script block: "Where-Object { Remove-Item C:\x }" se cae acá.
+    private static readonly Regex CmdForbiddenPattern = new(
+        @"(?i)\b(?:remove-item|rm\s|rd\s|rmdir|del\s|erase|move-item|rename-item|copy-item|new-item|set-content|add-content|out-file|clear-content|set-item|set-itemproperty|new-itemproperty|remove-itemproperty|new-alias|new-function|new-module|invoke-expression|\biex\b|start-process|start-job|stop-process|stop-service|restart-service|kill|taskkill|sc\s+delete|reg\s+(?:add|delete|import)|schtasks|bitsadmin|certutil|cipher|attrib|icacls|takeown|vssadmin|bcdedit|diskpart|format-volume|clear-disk|initialize-disk|set-executionpolicy|shutdown|restart-computer|stop-computer|winget|choco|scoop|pip|conda|npm|dotnet|git|msiexec|curl|wget|ssh|scp|sftp|ftp|telnet|nc\b|ncat|netcat|invoke-webrequest|invoke-restmethod|invoke-command|start-bitstransfer|test-netconnection|test-connection|ping|tracert|pathping|nslookup|resolve-dnsname|arp\b|netstat|route\b|get-nettcpconnection|import-module|install-package|add-type|downloadstring|downloadfile|new-object|set-location|cd\s|new-pssession|invoke-pester|measure-script|get-event|export-|out-file|start-sleep)\b|>|`|\$\(|\$[A-Za-z_]",
+        RegexOptions.Compiled);
+
+    private static bool IsCommandAllowedInAllowlist(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return false;
+        }
+
+        if (CmdForbiddenPattern.IsMatch(command))
+        {
+            return false;
+        }
+
+        // Cada segmento de una cadena (;, &, |) debe arrancar con verbo o alias permitido, así no
+        // alcanza con "Get-ChildItem; Remove-Item" ni con "Get-ChildItem | Remove-Item".
+        var segments = command.Split(';', '&', '|');
+        foreach (var rawSegment in segments)
+        {
+            var segment = rawSegment.Trim().TrimStart('&', '|').Trim();
+            if (segment.Length == 0)
+            {
+                continue;
+            }
+
+            // Un script block o paréntesis al principio significa construcción dinámica: se rechaza.
+            if (segment[0] == '{' || segment[0] == '(')
+            {
+                return false;
+            }
+
+            var spaceIndex = segment.IndexOf(' ');
+            var firstToken = spaceIndex > 0 ? segment[..spaceIndex] : segment;
+            var name = Path.GetFileNameWithoutExtension(firstToken).Trim().ToLowerInvariant();
+            if (name.Length == 0)
+            {
+                return false;
+            }
+
+            if (Array.IndexOf(CmdAllowedNames, name) >= 0)
+            {
+                continue;
+            }
+
+            var dash = name.IndexOf('-');
+            var verb = dash > 0 ? name[..dash] : name;
+            if (Array.IndexOf(CmdAllowedVerbs, verb) < 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
     private static readonly Regex WriteMarkerPresent = new(@"\[\[WRITE\]\]", RegexOptions.Compiled);
     private static readonly Regex EndMarkerPattern = new(@"\[\[END\]\]", RegexOptions.Compiled);
     private static readonly Regex DangerousCommandPattern = new(@"\b(?:format|diskpart|bcdedit|vssadmin)\b|remove-item[^\r\n]*-recurse[^\r\n]*-force|rm\s+-rf|del\s+/[sq]|rd\s+/s|shutdown|restart-computer|stop-computer|reg\s+delete|takeown|icacls[^\r\n]*/reset|clear-disk|initialize-disk|set-executionpolicy\s+unrestricted", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -2551,6 +2638,12 @@ except KeyboardInterrupt:
                 break;
             case "CMD":
                 var dangerous = DangerousCommandPattern.IsMatch(tool.Argument);
+                if (config.CmdMode == "allowlist" && !IsCommandAllowedInAllowlist(tool.Argument))
+                {
+                    deniedInTurn.Add(deniedKey);
+                    return BuildDeniedMessage("el comando de PowerShell", Truncate(tool.Argument, 60), CmdAllowlistDisabledReason, isRepeat: false);
+                }
+
                 Console.WriteLine();
                 var cmdDecision = AskPermission($"El agente quiere EJECUTAR en PowerShell: {tool.Argument}", dangerous, cancellationToken);
                 if (!cmdDecision.Allowed)
@@ -3840,6 +3933,7 @@ except KeyboardInterrupt:
             Console.WriteLine($"Cache KV:      {config.CacheTypeK}/{config.CacheTypeV}");
             Console.WriteLine($"Internet:      {(config.NetEnabled ? "on (bajo autorización)" : "off")}");
             Console.WriteLine($"Seguridad red: {(config.SecurityToolsEnabled ? "ACTIVADA (SCAN/SPOOF habilitados)" : "desactivada (SCAN/SPOOF bloqueados)")}");
+            Console.WriteLine($"Modo CMD:      {(config.CmdMode == "allowlist" ? "allowlist (solo lectura local)" : "full (PowerShell completo)")}");
             Console.WriteLine($"Espera carga:  {config.StartupTimeoutSeconds} s");
             Console.WriteLine($"System prompt: {Truncate(config.SystemPrompt, 100)}");
             return 0;
@@ -3922,6 +4016,10 @@ except KeyboardInterrupt:
             case "security-tools":
             case "security":
                 config.SecurityToolsEnabled = value is "on" or "si" or "sí" or "yes" or "true";
+                break;
+            case "cmd-mode":
+            case "cmd":
+                config.CmdMode = value.Equals("allowlist", StringComparison.OrdinalIgnoreCase) || value.Equals("seguro", StringComparison.OrdinalIgnoreCase) ? "allowlist" : "full";
                 break;
             case "timeout":
                 config.StartupTimeoutSeconds = ParseInt(value, "timeout");
