@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vulnerabilidad de seguridad
+    url: https://github.com/nicotips27/agente-IA27-terminal/security/advisories/new
+    about: >
+      Reportá las de seguridad por advisory privado, no por issue. Ver
+      SECURITY.md: este agente ejecuta PowerShell completo, así que la
+      superficie de ataque hay que revisarla con cuidado.
+
+  - name: Estado del proyecto
+    url: https://github.com/nicotips27/agente-IA27-terminal/blob/main/docs/IA27-BITACORA-MAESTRA-Y-REGLAS.txt
+    about: >
+      Qué está hecho, qué está pendiente y por qué. La bitácora es el registro
+      real, con las trampas que ya se encontraron.

@@ -1,0 +1,21 @@
+# Dueño único del proyecto.
+#
+# Este repo es de una sola persona, así que CODEOWNERS es más documentación que
+# control de acceso: deja escrito quién decide. No hay CODEOWNERS con múltiples
+# owners, ni bot de triage, ni cierre automático de issues. Ese andamiaje de
+# opencode está pensado para cientos de contributors; acá sería ceremonia.
+#
+# Cuando el proyecto tenga más de una persona, este archivo es lo primero que
+# hay que cambiar.
+
+*                       @nicotips27
+
+# La capa de gobernanza del repo (la que en opencode se define arriba de todo):
+/.github/               @nicotips27
+/CONTRIBUTING.md        @nicotips27
+/SECURITY.md            @nicotips27
+/docs/                  @nicotips27
+
+# El loop de agente. Cambiarlo requiere permiso explícito.
+/TerminalApplication.cs @nicotips27
+/ECnetServerSession.cs  @nicotips27

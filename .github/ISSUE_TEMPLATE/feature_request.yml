@@ -1,0 +1,56 @@
+name: Proponer una herramienta o funcionalidad
+description: Una capacidad nueva para el agente
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: para-que
+    attributes:
+      label: Para qué sirve
+      description: El problema que resuelve, en concreto. No la solución todavía.
+    validations:
+      required: true
+
+  - type: textarea
+    id: como-se-usa
+    attributes:
+      label: Cómo lo usarías
+      description: >
+        La frase exacta que le dirías al agente. Si es una herramienta nueva,
+        esto es lo que define su marcador `[[XXX]]`.
+      placeholder: 'Escribí: "descargame el video de este link en mp3"'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: Tipo de cambio
+      options:
+        - Herramienta de agente nueva (marcador [[XXX]])
+        - Búsqueda o acceso a la web
+        - Interfaz de la terminal
+        - Comando /
+        - Documentación
+        - Corrección de una trampa o un parser
+        - Otro
+    validations:
+      required: true
+
+  - type: textarea
+    id: permisos
+    attributes:
+      label: Permisos que debería pedir
+      description: >
+        Toda herramienta nueva tiene que decir cuándo pide confirmación y
+        cuándo no. La regla vigente: `[[CMD]]` y `[[WRITE]]` SIEMPRE preguntan,
+        nunca con autorización automática.
+      placeholder: "Siempre pide permiso, con advertencia roja."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas que consideraste
+    validations:
+      required: false

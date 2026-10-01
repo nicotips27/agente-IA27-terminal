@@ -1,0 +1,62 @@
+name: Reportar un bug
+description: Algo anda mal en IA27 Terminal
+labels: ["bug"]
+body:
+  - type: textarea
+    id: que-pasa
+    attributes:
+      label: Qué pasa
+      description: Qué esperabas y qué pasó en su lugar.
+    validations:
+      required: true
+
+  - type: textarea
+    id: como-reproducir
+    attributes:
+      label: Cómo reproducirlo
+      description: >
+        Los pasos exactos. Si es una trampa del modelo (no hace lo que le
+        pedís, dice que hizo algo que no hizo, corta una ruta), pegá el
+        mensaje EXACTO del modelo y el prompt que le diste.
+      placeholder: |
+        1. Escribí: "..."
+        2. El modelo respondió: "..."
+        3. Pero el archivo no apareció / la ruta se cortó en ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: salida
+    attributes:
+      label: Salida de consola
+      description: Lo que salió por pantalla, con los `[SISTEMA · ...]` inclusive.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Entrega
+      description: >
+        Qué portable estabas usando. El hash SHA-256 sale de
+        `Get-FileHash .\publish\portable.exe`. Si no lo sabés, con la fecha
+        alcanza.
+    validations:
+      required: true
+
+  - type: input
+    id: modelo
+    attributes:
+      label: Modelo
+      description: Qué .gguf y qué hash tiene.
+      placeholder: "Atenea-Omega-IB2.gguf (Qwen2.5-7B-Instruct Q4_K_M)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: notas
+    attributes:
+      label: Algo más
+    validations:
+      required: false
