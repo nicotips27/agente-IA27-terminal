@@ -1,0 +1,46 @@
+name: build
+
+# Verifica que el proyecto compile. Es el equivalente del typecheck de un
+# proyecto TypeScript: el proyecto no tiene suite de tests, asi que la
+# compilacion en Release es la unica verificacion automatica posible.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Release, no Debug: el csproj publica win-x64 self-contained, y varios
+      # bugs de este proyecto (trampas de rutas, armado de comandos) solo se
+      # manifiestan fuera de la configuracion de depuracion.
+      #
+      # build y NO publish: el portable pesa ~70 MB, publish/ esta en
+      # .gitignore y la regla de republicado es manual y local. El CI verifica
+      # que compila; regenerar el portable es tarea de quien esta en la maquina.
+      - name: Build
+        run: dotnet build -c Release
+
+      # El AGENTS.md obliga a renormalizar antes de commitear. Si alguien mete
+      # un archivo con finales mezclados, el checkout lo normaliza y el diff
+      # queda limpio, pero este chequeo avisa en vez de dejarlo pasar.
+      - name: Sin finales de linea mezclados
+        run: |
+          $mixed = git ls-files --eol | Select-String "w/mixed"
+          if ($mixed) {
+            Write-Error "Archivos con finales de linea mezclados:"
+            $mixed | ForEach-Object { Write-Host $_.Line }
+            exit 1
+          }
+          Write-Host "OK: sin finales de linea mezclados"
