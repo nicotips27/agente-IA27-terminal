@@ -32,7 +32,7 @@ En la consola **no hay pestañas**: se borró la barra dibujada con `Console.Wri
 ## Icono del portable
 
 - Fuente: `icono.ico` (multi-resolución 16/24/32/48/64/128/256 px, 32 bpp BGRA) en la raíz del proyecto.
-- `IaTerminal.csproj` lo engancha con `<ApplicationIcon>icono.ico</ApplicationIcon>`: eso pone el icono en el `.exe` que muestra el Explorador.
+- `ECnet.csproj` lo engancha con `<ApplicationIcon>icono.ico</ApplicationIcon>`: eso pone el icono en el `.exe` que muestra el Explorador.
 - `Program.ApplyWindowIcon()` además pone el icono en la **ventana de consola** al arrancar, con `ExtractIconEx` + `WM_SETICON` (P/Invoke de `shell32`/`user32`). Lee el icono del propio ejecutable (`Environment.ProcessPath`), así que no depende de archivos sueltos ni de `System.Drawing.Common` (no disponible en .NET 8 sin paquete extra). Todo va envuelto en `try/catch`: si falla, la terminal arranca igual.
 - Para regenerar el `.ico` desde un JPG hay que escribir las entradas **a mano** (DIB bottom-up + máscara AND). Ojo: la `BITMAPINFOHEADER` tiene 40 bytes y `biSize` va PRIMERO, en offset 0 — si se empieza escribiendo `biWidth` en offset 0 la cabecera queda corrida 4 bytes y `System.Drawing.Icon` / el Explorador rechazan el archivo sin error visible.
 - Verificar que el icono realmente quedó: `ExtractAssociatedIcon` sobre `publish\portable.exe` y comparar píxeles contra el JPG original (la diferencia media por canal debe dar 0).
@@ -42,7 +42,7 @@ En la consola **no hay pestañas**: se borró la barra dibujada con `Console.Wri
 - `Program.cs` — punto de entrada, tema de consola.
 - `Banner.cs` — banner de arranque con Spectre.Console (panel del logo, tabla de Estado, comandos reales — bitácora PARTE 23).
 - `AppConfig.cs` — configuración persistente (`config.json`).
-- `ECnetServerSession.cs` — lanza `ecnet-server.exe`, streaming SSE a `/v1/chat/completions`, **políticas del system prompt** (`NetPolicy`, `ToolsPolicy`).
+- `ECnetServerSession.cs` — lanza `llama-server.exe`, streaming SSE a `/v1/chat/completions`, **políticas del system prompt** (`NetPolicy`, `ToolsPolicy`).
 - `TerminalApplication.cs` — loop del agente, comandos `/`, búsqueda web por intención (dónde → Nominatim/OpenStreetMap; clima → Open-Meteo; general → Wikipedia con extracto + DuckDuckGo con el texto de la página ganadora — ver bitácora PARTE 22), **herramientas de agente** (`[[READ]]`, `[[CMD]]`, `[[WRITE]]`), intercepción de negativas del modelo.
 
 ## Patrón de herramientas (extensión del agente)
@@ -100,7 +100,7 @@ Layout verificado y funcionando. Todo en `C:\Users\nicot\OneDrive\Desktop\Estali
 IA 27 T\
   ia_terminal\                      ← repo: código, .git, AGENTS.md, bitácora
   ia_terminal\publish\portable.exe  ← portable (el entregable real)
-  ia_terminal\publish\runtime\      ← ecnet-server.exe y DLLs
+  ia_terminal\publish\runtime\      ← llama-server.exe y DLLs
   ia_terminal\publish\config.json   ← config del portable de desarrollo
   portable 0.2.exe                  ← entrega congelada
   runtime\                          ← runtime de la entrega
@@ -114,7 +114,7 @@ IA 27 T\
 - `Save()` respeta la ruta de modelos que el usuario fija explícitamente (no la pisa la resolución automática).
 - **Hay DOS `config.json`**, uno por ejecutable, y cambiár uno no cambia el otro. Para cambiar la ruta del modelo hay que usar `portable.exe config set model-dir "<ruta>"` en los DOS, no editar el archivo a mano.
 - Publicar: `dotnet publish -c Release -o publish`. **Requiere que `portable.exe` NO esté corriendo** (IOException al empaquetar).
-- Al arrancar, un `ecnet-server.exe` huérfano de una sesión anterior puede impedir la carga (memoria y archivo de modelo tomados). Limpiar: `Get-Process ecnet-server | Stop-Process -Force`.
+- Al arrancar, un `llama-server.exe` huérfano de una sesión anterior puede impedir la carga (memoria y archivo de modelo tomados). Limpiar: `Get-Process llama-server | Stop-Process -Force`.
 - El entregable congelado NO es un .exe suelto: al lado tiene que estar `runtime\` y su propio `config.json`, si no arranca resolviendo a una ruta de C: y `doctor` da OK mentiroso.
 - Verificación rápida sin abrir la sesión: `portable.exe doctor` (todo `[OK]`) y `portable.exe listar` (debe mostrar el GGUF). Un `doctor` OK no alcanza: hay que mirar de dónde sacó el runtime y el modelo.
 

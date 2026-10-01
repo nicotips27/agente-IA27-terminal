@@ -1,0 +1,31 @@
+# Consistente con .gitattributes: LF en el indice Y en el disco, en todos los
+# los sistemas. Si cambia algo aca, hay que cambiar .gitattributes tambien.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+# Los using estan en orden alfabetico y el idioma es el espanol rioplatense.
+# Los comentarios y las cadenas van con tildes: son UTF-8, no escapes.
+charset = utf-8
+
+[*.{csproj,props,targets,yml,yaml,json,jsonc}]
+indent_style = space
+indent_size = 2
+
+[*.{md,txt}]
+# La bitacora y los historiales tienen tablas alineadas a mano: cortar el
+# espacio final las rompe. insert_final_newline tambien se deja quieto.
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+[*.{ico,png,jpg,gguf,wav,exe,dll,pdb,zip}]
+insert_final_newline = false
+trim_trailing_whitespace = false
+binary = true

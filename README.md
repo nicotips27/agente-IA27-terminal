@@ -24,7 +24,7 @@ Terminal de inteligencia artificial que corre **modelos GGUF de forma local** co
 - Windows x64
 - .NET 8 SDK (solo para compilar; el ejecutable publicado es autocontenido)
 - Un modelo `.gguf` (Qwen2.5-7B-Instruct Q4_K_M recomendado)
-- Binarios de `ECnet` (`ecnet-server.exe`)
+- Binarios de `ECnet` (`llama-server.exe`)
 
 ## Compilar
 
@@ -184,7 +184,7 @@ Valores por defecto relevantes:
 ## Estructura del proyecto
 
 ```
-IaTerminal.csproj           proyecto .NET 8
+ECnet.csproj           proyecto .NET 8
 Program.cs                  punto de entrada y tema de consola
 AppConfig.cs                configuración persistente
 ModelCatalog.cs             escaneo de archivos .gguf
@@ -201,7 +201,7 @@ El ejecutable es **self-contained**: no necesita .NET instalado ni Python. Para 
 
 ```
 <stick>\IA 27 T\ia_terminal\publish\portable.exe   ← terminal
-<stick>\IA 27 T\ia_terminal\publish\runtime\       ← ecnet-server.exe + DLLs
+<stick>\IA 27 T\ia_terminal\publish\runtime\       ← llama-server.exe + DLLs
 <stick>\IA 27 T\ia_terminal\publish\config.json    ← configuración (viaja con el USB)
 <stick>\Modelo\Atenea-Omega-IB2.gguf                ← modelos (o en publish\models\)
 ```

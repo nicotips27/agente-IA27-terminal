@@ -4,9 +4,9 @@ IA27 TERMINAL — BITÁCORA MAESTRA, MÉTODOS Y REGLAS
 ================================================================================
 Proyecto  : Agente IA local (C#/.NET 8 + ECnet, sin Python)
 AGENTE    : opencode  ← el que programa y mantiene esto (ver PARTE 2)
-Este doc  : IA27-BITACORA-MAESTRA-Y-REGLAS.txt, EN EL REPO (raíz de
-            ia_terminal\), junto a AGENTS.md. Se versiona con el código, así
-            que viaja con él y no hay que acordarse de copiarlo a mano.
+Este doc  : IA27-BITACORA-MAESTRA-Y-REGLAS.txt, EN EL REPO (docs/, dentro de
+            ia_terminal\), junto a AGENTS.md en la raíz. Se versiona con el
+            código, así que viaja con él y no hay que acordarse de copiarlo.
 Carpeta   : C:\Users\nicot\OneDrive\Desktop\Estalingrado corp\proyectos\IA 27 T\
              (antes: Desktop\IA 27 T\ — la carpeta se movió el 27/9; ver P15
              punto 34 y la actualización de rutas de esta misma fecha)
@@ -19,16 +19,15 @@ Carpeta   : C:\Users\nicot\OneDrive\Desktop\Estalingrado corp\proyectos\IA 27 T\
              logs\                             ← lo crea solo al arrancar
 Portable  : ia_terminal\publish\portable.exe
              CON los fixes (Job Object + mutex + logs, ver PARTE 19).
-Entrega   : portable 0.2.exe  ·  69.901.327 bytes  ·  2026-09-28 16:3x
-             SHA-256 B930F337C9210425D5C8675080CBE38D26B93EA51BF837F34B9D778A4D5EAD5E
-             ACTUALIZADA el 28/9: F1 rechazo con motivo (PARTE 24) + F2
-             píldoras de permiso y diff (PARTE 25) + F3 /stats (PARTE 26) +
-             fixes de los 2 bugs del camino interactivo + texto de /help
-             actualizado. Idéntica al publish (verificado byte a byte).
-             Hashes intermedios del mismo día: 4D227446…D2B904 (F1),
-             EFAF15F1…735A47 (F2), D0E8E8D4…C0A26DF (F3),
-             FC29A685…ED8E9B (fixes de F2). Ver PARTE 17 para la histórica
-             completa y la regla de actualización.
+Entrega   : portable 0.2.exe  ·  69.934.095 bytes  ·  2026-09-30 12:45
+             SHA-256 85E0B7F628A2838A8E527A354130B53525B8830DFA8D2E3DFE597568E773CBB3
+             ACTUALIZADA el 30/9 con la PARTE 32 (herramientas de seguridad
+             OFF por defecto) + la PARTE 31 (YTDLP/SCAN/SPOOF) + F1/F2/F3
+             (PARTE 24/25/26). Idéntica al publish (verificado byte a byte).
+             Historia de hashes, con los intermedios del 28/9 (4D227446…D2B904
+             F1, EFAF15F1…735A47 F2, D0E8E8D4…C0A26DF F3, FC29A685…ED8E9B
+             fixes de F2) y el B930F337…4D5EAD5E del 28/9: PARTE 17, con la
+             regla de actualización.
 Versión   : 0.2   ← CONGELADA (ver PARTE 21)
              0.1   (2026-09-27 02:23)  SIN los fixes de la PARTE 19. Ya no está
                    en esta máquina (se fue con el pendrive); queda su hash
@@ -36,7 +35,11 @@ Versión   : 0.2   ← CONGELADA (ver PARTE 21)
 Modelo    : modelos\Atenea-Omega-IB2.gguf  (Qwen2.5-7B-Instruct Q4_K_M)
             4.683.074.240 bytes · 4,36 GB
             hash 65B8FCD92AF6B4FEFA935C625D1AC27EA29DCB6EE14589C55A8F115CEAAA1423
-Repo      : https://github.com/Estalingradocorp/IA27Terminal-.git  (privado)
+Repo      : https://github.com/nicotips27/agente-IA27-terminal.git
+             El remoto real, verificado con `git remote -v` el 30/9. Antes
+             acá figuraba Estalingradocorp/IA27Terminal-.git, que no es el
+             remoto configurado. La mención histórica de esa URL en la PARTE
+             2 (línea ~197) se deja como está: es el registro de lo que había.
 CPU/GPU   : Intel i3-10100F (8 lógicos) · 15,9 GB RAM · GTX 1050 Ti 4 GB
             GPU INUTILIZABLE: el runtime es solo CPU. Ver PARTE 12.
 SDK       : .NET 8.0.424
@@ -52,6 +55,23 @@ Fase      : ENTRENAMIENTO. Se está probando al agente con tareas reales y se
             local por internet (Despensa Nancy, el almacén de la esquina).
             Con matices: los datos que no estaban en la búsqueda, los inventó
             (ver P15 punto 36).
+
+Actualizado: 2026-09-30 (PARTE 31 + PARTE 32) — herramientas de red YTDLP/SCAN/
+  SPOOF, notificaciones de escritorio, y las herramientas de seguridad pasadas a
+  OFF por defecto (config set security-tools on para habilitarlas). OJO: el flag no
+  es una restricción real, [[CMD]] sigue siendo PowerShell completo y en la prueba
+  el 7B esquivó el bloqueo de [[SCAN]] con Test-NetConnection. El cmd-mode allowlist
+  sigue PENDIENTE. Entrega actualizada: hash 85E0B7F6…E773CBB3, 69.934.095 bytes.
+  Commits: 87f83ca (PARTE 31), c68ba81 (PARTE 32).
+
+Actualizado: 2026-09-30 (gobernanza del repo) — el repo toma la capa de gobernanza
+  de anomalyco/opencode: LICENSE (MIT, que no existía pese a que el README lo
+  anunciaba), CONTRIBUTING, SECURITY, CHANGELOG, .editorconfig, .gitattributes
+  (LF forzado; el índice ya estaba en LF, lo sucio eran 6 archivos en disco), CI
+  de .NET en .github/workflows, y plantillas de PR e issue. Las referencias
+  desactualizadas a ecnet-server.exe y IaTerminal.csproj se corrigen a
+  llama-server.exe y ECnet.csproj. Las instantáneas históricas del 27/9 NO se
+  tocan: son el registro de lo que había.
 
 Actualizado: 2026-09-28 (interfaz F1+F2+F3) — las tres fases de P16 en un día:
   F1 rechazo con motivo (PARTE 24), F2 píldoras de permiso + diff LCS en
