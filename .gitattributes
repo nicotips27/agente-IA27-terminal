@@ -1,0 +1,19 @@
+# Normalizacion de finales de linea.
+# LF en el indice Y en el disco, en todos los sistemas. Esta linea pisa
+# core.autocrlf, asi que no depende de la config local de cada uno.
+* text=auto eol=lf
+
+# Binarios: git no debe intentar normalizarlos NUNCA.
+# Los .wav son notificaciones de audio y el .ico tiene cabeceras que se
+# rompen si un byte se convierte. El .gguf pesa 4,36 GB y el runtime son
+# ~50 DLLs: si alguien los agrega por error, que entren como blobs.
+*.ico   binary
+*.gguf  binary
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.wav   binary
+*.exe   binary
+*.dll   binary
+*.pdb   binary
+*.zip   binary
