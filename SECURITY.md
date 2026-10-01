@@ -75,26 +75,51 @@ escribir si la ruta es una **carpeta** (evita el archivo basura con nombre de ca
 | --- | --- | --- |
 | Bind | `--host 127.0.0.1` | Solo loopback. No es alcanzable desde la red. |
 | Puerto | **libre, asignado por el SO** | `FindFreePort()` pide un puerto efímero al sistema en cada arranque. No está en `config.json` |
-| CORS | **no se pasa `--cors`** | llama.cpp deja CORS desactivado salvo que se pida explícitamente |
-| API key | **no se pasa `--api-key`** | Sin autenticación |
+| CORS | **`*` por defecto de llama.cpp** | No se restringe. Ver abajo |
+| API key | **ninguno** | Sin autenticación |
 | Paralelo | `--parallel 1` | Una sesión a la vez |
 
-**El riesgo residual real no es el CORS: es que no hay autenticación y escucha en un
-puerto de loopback.** Cualquier proceso local puede hablar con el modelo mientras la
-sesión está viva. CORS no protege contra eso — protege contra el *navegador*, y es
-justamente lo contrario de lo que pasa acá.
+**Este es el punto que hay que entender bien**, porque es contraintuitivo.
 
-Lo que **sí** mitiga el ataque desde el navegador: sin `--cors`, una página web no
-puede leer respuestas cross-origin de este puerto, y los endpoints de llama.cpp reciben
-`application/json`, que dispara *preflight* y falla sin cabeceras CORS. El vector real
-es otro software corriendo en la misma sesión de usuario, no una página.
+`llama-server` levanta con CORS en comodín y sin API key por defecto. Cada arranque
+escribe este aviso en el log:
 
-Mitigaciones actuales: el puerto es efímero y lo elige el SO (no es adivinable desde
-fuera ni queda fijo entre arranques), y `ChildProcessJob.cs` mata los `llama-server`
-huérfanos al cerrar, así el modelo no queda cargado en memoria para el proceso que siga.
+```
+CORS is set to allow all origins ('*') and no API key is set
+this can be a security risk (cross-origin attacks)
+```
 
-**Pendiente:** evaluar un `--api-key`, o al menos dejar registrado que el puerto queda
-abierto a todo lo local mientras la sesión está viva.
+No hace falta pasar `--cors` para que esté activo: el comodín ya es el default del
+upstream. (Esta es la **PARTE 20** de la bitácora, y su premisa es correcta.)
+
+Combinado con `--host 127.0.0.1`, el servidor **no es alcanzable desde la red**: la
+amenaza es local, no remota. Pero "local" aquí incluye **cualquier página web abierta
+en el navegador**: con CORS en `*`, una página puede pegarle a
+`http://127.0.0.1:<puerto>` y **leer la respuesta del modelo**. Eso es cross-site
+request forgery contra un servidor local, y es un vector real, no teórico.
+
+El puerto es aleatorio (`FindFreePort`), lo que baja la probabilidad pero no la anula:
+una página podría barrer un rango de puertos altos. **Un puerto aleatorio NO es una
+mitigación de seguridad**, solo agrega ruido.
+
+Aparte del navegador, cualquier proceso local puede hablar con el modelo mientras la
+sesión está viva. CORS no protege contra eso — protege contra el navegador.
+
+Mitigaciones actuales: bind a loopback (saca la red, no el navegador) y puerto
+aleatorio (ruido, no seguridad). `ChildProcessJob.cs` mata los `llama-server`
+huérfanos al cerrar, así el modelo no queda cargado en memoria para el proceso que
+siga.
+
+**Pendiente, sin resolver:** las tres opciones de la PARTE 20 siguen sin elegirse —
+(a) `--api-key` aleatorio por sesión mandándolo en cada request, que es lo que
+recomienda el aviso upstream; (b) restringir el CORS con `--cors-origins`; o
+(c) aceptar el riesgo a sabiendas y dejarlo escrito. Mientras no se elija una, es una
+decisión pendiente.
+
+Verificado contra el `--help` del runtime: `--cors-origins` tiene default `*`,
+`--cors-headers` default `*` y `--cors-credentials` default **habilitado**. Ese
+último es lo que agrava el cuadro: con credenciales permitidas y orígenes en `*`, el
+ataque desde el navegador tiene menos trabas de las que parecería.
 
 **Pendiente:** evaluar un `--api-key`, o al menos documentar el puerto para que quien
 lo use sepa que está abierto a todo lo local.
