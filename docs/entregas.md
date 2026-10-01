@@ -22,13 +22,17 @@ empaquetar).
 | | |
 | --- | --- |
 | Archivo | `publish/portable.exe` |
-| SHA-256 | `85E0B7F628A2838A8E527A354130B53525B8830DFA8D2E3DFE597568E773CBB3` |
+| SHA-256 | `D9764CAB5E27496349A124EA1D341A5D3118ADF54E92601CDF2084466058E31B` |
 | Tamaño | 69.934.095 bytes |
-| Fecha | 30/9/2026 12:45 |
+| Fecha | 30/9/2026 21:59 |
 
 Idéntica byte a byte a `..\portable 0.2.exe` (la entrega congelada). Los números
 concretos viven acá y en la bitácora, no en `AGENTS.md`, que es la regla y no el
 inventario.
+
+Ojo con dos builds del mismo día: el de las 12:45 era `85E0B7F6…E773CBB3` y **no**
+tenía el banner con el estado real de la seguridad de red. Si comparás hashes contra
+una nota vieja, el tamaño es el mismo (69.934.095) y por tamaño no se distinguen.
 
 ## Layout
 

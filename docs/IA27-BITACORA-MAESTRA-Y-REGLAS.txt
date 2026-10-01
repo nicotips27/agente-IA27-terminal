@@ -19,11 +19,15 @@ Carpeta   : C:\Users\nicot\OneDrive\Desktop\Estalingrado corp\proyectos\IA 27 T\
              logs\                             ← lo crea solo al arrancar
 Portable  : ia_terminal\publish\portable.exe
              CON los fixes (Job Object + mutex + logs, ver PARTE 19).
-Entrega   : portable 0.2.exe  ·  69.934.095 bytes  ·  2026-09-30 12:45
-             SHA-256 85E0B7F628A2838A8E527A354130B53525B8830DFA8D2E3DFE597568E773CBB3
-             ACTUALIZADA el 30/9 con la PARTE 32 (herramientas de seguridad
-             OFF por defecto) + la PARTE 31 (YTDLP/SCAN/SPOOF) + F1/F2/F3
-             (PARTE 24/25/26). Idéntica al publish (verificado byte a byte).
+Entrega   : portable 0.2.exe  ·  69.934.095 bytes  ·  2026-09-30 21:59
+             SHA-256 D9764CAB5E27496349A124EA1D341A5D3118ADF54E92601CDF2084466058E31B
+             REGENERADA el 30/9 21:59 con la PARTE 32 (herramientas de
+             seguridad OFF por defecto) + la PARTE 31 (YTDLP/SCAN/SPOOF) +
+             F1/F2/F3 (PARTE 24/25/26). Idéntica al publish (verificado byte
+             a byte).
+             OJO, misma fecha que la de las 12:45 pero ES OTRO BUILD: el de
+             las 12:45 (85E0B7F6…E773CBB3) no tenía el banner con estado real
+             de seguridad de red ni la limpieza del config de la entrega.
              Historia de hashes, con los intermedios del 28/9 (4D227446…D2B904
              F1, EFAF15F1…735A47 F2, D0E8E8D4…C0A26DF F3, FC29A685…ED8E9B
              fixes de F2) y el B930F337…4D5EAD5E del 28/9: PARTE 17, con la
@@ -62,6 +66,11 @@ Actualizado: 2026-09-30 (PARTE 31 + PARTE 32) — herramientas de red YTDLP/SCAN
   es una restricción real, [[CMD]] sigue siendo PowerShell completo y en la prueba
   el 7B esquivó el bloqueo de [[SCAN]] con Test-NetConnection. El cmd-mode allowlist
   sigue PENDIENTE. Entrega actualizada: hash 85E0B7F6…E773CBB3, 69.934.095 bytes.
+  PASSED: hash D9764CAB…58E31B, 69.934.095 bytes. Se limpió UseTabs del config de
+  la entrega (clave muerta desde la PARTE 29: se declara y se inicializa pero nadie
+  la lee). OJO: PythonPath NO está muerta, la usa ResolvePythonPath() para [[PY]].
+  El llama-server huérfano de las 20:47 (con Arcont-27.gguf tomado en el 61550) se
+  mató antes de publicar: sin eso la publicación y la prueba fallan.
   Commits: 87f83ca (PARTE 31), c68ba81 (PARTE 32).
 
 Actualizado: 2026-09-30 (gobernanza del repo) — el repo toma la capa de gobernanza
